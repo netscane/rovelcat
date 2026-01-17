@@ -19,7 +19,8 @@ dependencies:
   web_socket_channel: ^2.4.0
   # Audio player
   just_audio: ^0.9.36
-  just_audio_windows: ^0.2.2
+  just_audio_media_kit: ^2.0.0
+  media_kit_libs_windows_audio: ^1.0.0
   # File picker
   file_picker: ^6.1.1
   # UUID
