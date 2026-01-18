@@ -192,7 +192,10 @@ class WebSocketService {
   WsConnectionState _sessionState = WsConnectionState.disconnected;
 
   bool _shouldReconnectGlobal = false;
+  bool _shouldReconnectSession = false;
   Timer? _reconnectTimer;
+  Timer? _sessionReconnectTimer;
+  String? _lastSessionId;
 
   WebSocketService(this._wsBaseUrl);
 
@@ -275,6 +278,14 @@ class WebSocketService {
 
   /// 连接会话 WebSocket
   Future<void> connectSession(String sessionId) async {
+    _shouldReconnectSession = true;
+    _lastSessionId = sessionId;
+    _doConnectSession(sessionId);
+  }
+
+  Future<void> _doConnectSession(String sessionId) async {
+    if (!_shouldReconnectSession) return;
+    
     _sessionState = WsConnectionState.connecting;
     final url = '$_wsBaseUrl/session/$sessionId';
 
@@ -284,7 +295,8 @@ class WebSocketService {
     await _sessionChannel!.ready.timeout(
       const Duration(seconds: 5),
       onTimeout: () {
-        throw Exception('WebSocket connection timeout');
+        debugPrint('WebSocketService: Session connection timeout');
+        _scheduleReconnectSession();
       },
     );
 
@@ -306,18 +318,29 @@ class WebSocketService {
       onError: (error) {
         debugPrint('WebSocketService: Session stream error: $error');
         _sessionState = WsConnectionState.disconnected;
-        _sessionEventController.add(WsErrorEvent(error.toString()));
+        _scheduleReconnectSession();
       },
       onDone: () {
         debugPrint('WebSocketService: Session stream done');
         _sessionState = WsConnectionState.disconnected;
-        _sessionEventController.add(WsDisconnectedEvent());
+        _scheduleReconnectSession();
       },
     );
   }
 
+  void _scheduleReconnectSession() {
+    if (!_shouldReconnectSession) return;
+
+    _sessionReconnectTimer?.cancel();
+    _sessionState = WsConnectionState.reconnecting;
+    _sessionReconnectTimer = Timer(const Duration(seconds: 5), () => _doConnectSession(_lastSessionId ?? ''));
+  }
+
   /// 断开会话 WebSocket
   void disconnectSession() {
+    _shouldReconnectSession = false;
+    _sessionReconnectTimer?.cancel();
+    _lastSessionId = null;
     _sessionChannel?.sink.close();
     _sessionChannel = null;
     _sessionState = WsConnectionState.disconnected;
