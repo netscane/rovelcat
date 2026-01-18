@@ -437,7 +437,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
   }
 
-  void _onAudioFinished() {
+   void _onAudioFinished() {
+    debugPrint('_onAudioFinished called: playbackState=${state.playbackState}');
     if (state.playbackState != PlaybackState.playing) return;
 
     if (state.currentSegmentIndex + 1 >= state.totalSegments) {
@@ -445,12 +446,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       return;
     }
 
-    // 移动到下一段
+     // 移动到下一段
     final nextIndex = state.currentSegmentIndex + 1;
-    state = state.copyWith(
-      currentSegmentIndex: nextIndex,
-      scrollToSegment: nextIndex,
-    );
+    
+    // 只有在没有手动滚动请求时才自动滚动
+    if (state.scrollToSegment == null) {
+      state = state.copyWith(
+        currentSegmentIndex: nextIndex,
+        scrollToSegment: nextIndex,
+      );
+    } else {
+      // 如果有手动滚动请求，只更新索引，不覆盖滚动目标
+      state = state.copyWith(currentSegmentIndex: nextIndex);
+    }
 
     // 检查是否就绪
     if (state.isSegmentReady(nextIndex)) {

@@ -22,7 +22,7 @@ dependencies:
   just_audio_media_kit: ^2.0.0
   media_kit_libs_windows_audio: ^1.0.0
   # File picker
-  file_picker: ^6.1.1
+  file_picker: ^8.0.0
   # UUID
   uuid: ^4.3.3
   # Path provider for audio caching
