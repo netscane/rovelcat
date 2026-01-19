@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/novel.dart';
 import '../../data/services/api_service.dart';
@@ -5,8 +7,14 @@ import '../../data/services/api_service.dart';
 /// 小说列表视图模式
 enum NovelViewMode { grid, list }
 
-/// 视图模式状态
-final novelViewModeProvider = StateProvider<NovelViewMode>((ref) => NovelViewMode.grid);
+/// 视图模式状态 - Web 平台默认列表模式，移动端默认封面模式
+final novelViewModeProvider = StateProvider<NovelViewMode>((ref) {
+  if (kIsWeb) {
+    return NovelViewMode.list;
+  } else {
+    return NovelViewMode.grid;
+  }
+});
 
 /// 小说列表状态
 class NovelListState {

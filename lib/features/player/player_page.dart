@@ -32,6 +32,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> with WidgetsBindingObse
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
+    
+    // 监听播放器状态，初始加载完成后滚动到当前播放段落
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startPlayback();
     });
@@ -137,17 +139,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage> with WidgetsBindingObse
     final playerState = ref.watch(playerProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
-    // 监听滚动目标和自动加载
+    // 监听播放器状态变化，初始加载完成后自动滚动到当前播放段落
     ref.listen<PlayerState>(playerProvider, (previous, current) {
       // 处理滚动到指定段落
       if (current.scrollToSegment != null) {
         _scrollToSegmentWhenReady(current.scrollToSegment!);
         ref.read(playerProvider.notifier).clearScrollToSegment();
       }
+      
       // 段落加载完成后检查是否需要继续加载更多
       final segmentsChanged = previous?.segments.length != current.segments.length;
       if (segmentsChanged && current.hasMore && !current.loadingMore) {
         _checkAutoLoadMore();
+      }
+      
+      // 新增：段落数据首次加载完成后，滚动到当前播放段落
+      final wasEmpty = previous == null ? true : (previous?.segments.isEmpty ?? false);
+      final isNowLoaded = current.segments.isNotEmpty;
+      final isPlaying = current.playbackState == PlaybackState.playing;
+      
+      if (wasEmpty && isNowLoaded && isPlaying) {
+        debugPrint('Initial segments loaded, scrolling to current segment: ${current.currentSegmentIndex}');
+        _scrollToSegmentWhenReady(current.currentSegmentIndex);
       }
     });
 
@@ -273,14 +286,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage> with WidgetsBindingObse
     final relativeIndex = index - state.loadedStart;
     if (relativeIndex < 0 || relativeIndex >= state.segments.length) return;
 
-    // 估算位置（每个段落约 80 像素高度）
-    final estimatedOffset = relativeIndex * 80.0;
-    final maxExtent = _scrollController.position.maxScrollExtent;
-    _scrollController.animateTo(
-      estimatedOffset.clamp(0.0, maxExtent),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      
+      final scrollPosition = _scrollController.position;
+      final maxScroll = scrollPosition.maxScrollExtent;
+      final viewportHeight = scrollPosition.viewportDimension;
+      
+      // 估算位置（每个段落约 130 像素，包括 padding）
+      final estimatedOffset = relativeIndex * 130.0;
+      
+      // 将段落放在屏幕可视区域的上半部分（约 30% 的视口高度），确保播放的句子保持可见
+      final extraOffset = viewportHeight * 0.3;
+      final targetOffset = (estimatedOffset - extraOffset).clamp(0.0, maxScroll);
+      
+      _scrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 
   void _onPlayPause() {
