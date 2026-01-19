@@ -26,6 +26,7 @@ class PlayerPage extends ConsumerStatefulWidget {
 
 class _PlayerPageState extends ConsumerState<PlayerPage> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
+  int? _scrollToIndex;
 
   @override
   void initState() {
@@ -271,40 +272,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage> with WidgetsBindingObse
       loadingMore: state.loadingMore,
       scrollController: _scrollController,
       onSegmentTap: _onSegmentTap,
+      scrollToIndex: _scrollToIndex,
+      onScrollCompleted: () {
+        setState(() {
+          _scrollToIndex = null;
+        });
+      },
     );
   }
 
   void _scrollToSegmentWhenReady(int index) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      _scrollToSegment(index);
-    });
-  }
-
-  void _scrollToSegment(int index) {
-    final state = ref.read(playerProvider);
-    final relativeIndex = index - state.loadedStart;
-    if (relativeIndex < 0 || relativeIndex >= state.segments.length) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      
-      final scrollPosition = _scrollController.position;
-      final maxScroll = scrollPosition.maxScrollExtent;
-      final viewportHeight = scrollPosition.viewportDimension;
-      
-      // 估算位置（每个段落约 130 像素，包括 padding）
-      final estimatedOffset = relativeIndex * 130.0;
-      
-      // 将段落放在屏幕可视区域的上半部分（约 30% 的视口高度），确保播放的句子保持可见
-      final extraOffset = viewportHeight * 0.3;
-      final targetOffset = (estimatedOffset - extraOffset).clamp(0.0, maxScroll);
-      
-      _scrollController.animateTo(
-        targetOffset,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+    setState(() {
+      _scrollToIndex = index;
     });
   }
 

@@ -70,3 +70,5 @@ proxy.js
 # Web 构建输出
 /web/build/
 /web/coverage/
+
+windows/

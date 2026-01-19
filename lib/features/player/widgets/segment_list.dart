@@ -3,7 +3,7 @@ import '../../../data/models/segment.dart';
 import '../../../data/models/segment_task.dart';
 
 /// 段落列表组件
-class SegmentList extends StatelessWidget {
+class SegmentList extends StatefulWidget {
   final List<Segment> segments;
   final int currentIndex;
   final int loadedStart;
@@ -12,6 +12,8 @@ class SegmentList extends StatelessWidget {
   final bool loadingMore;
   final ScrollController scrollController;
   final Function(int) onSegmentTap;
+  final int? scrollToIndex;
+  final VoidCallback? onScrollCompleted;
 
   const SegmentList({
     super.key,
@@ -23,28 +25,70 @@ class SegmentList extends StatelessWidget {
     required this.loadingMore,
     required this.scrollController,
     required this.onSegmentTap,
+    this.scrollToIndex,
+    this.onScrollCompleted,
   });
+
+  @override
+  State<SegmentList> createState() => _SegmentListState();
+}
+
+class _SegmentListState extends State<SegmentList> {
+  final Map<int, GlobalKey> _itemKeys = {};
+  int? _lastScrolledToIndex;
+
+  GlobalKey _getKeyForIndex(int segmentIndex) {
+    return _itemKeys.putIfAbsent(segmentIndex, () => GlobalKey());
+  }
+
+  @override
+  void didUpdateWidget(SegmentList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当 scrollToIndex 改变时触发滚动
+    if (widget.scrollToIndex != null && 
+        widget.scrollToIndex != _lastScrolledToIndex) {
+      _lastScrolledToIndex = widget.scrollToIndex;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSegment(widget.scrollToIndex!);
+      });
+    }
+  }
+
+  void _scrollToSegment(int segmentIndex) {
+    final key = _itemKeys[segmentIndex];
+    if (key?.currentContext == null) return;
+    
+    Scrollable.ensureVisible(
+      key!.currentContext!,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      alignment: 0.15, // 将目标项放在视口 15% 的位置（靠近顶部）
+    ).then((_) {
+      widget.onScrollCompleted?.call();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      controller: scrollController,
+      controller: widget.scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: segments.length + (hasMore ? 1 : 0),
+      itemCount: widget.segments.length + (widget.hasMore ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index >= segments.length) {
+        if (index >= widget.segments.length) {
           return _buildLoadingIndicator(context);
         }
         
-        final segment = segments[index];
-        final isPlaying = segment.index == currentIndex;
-        final task = tasks[segment.index];
+        final segment = widget.segments[index];
+        final isPlaying = segment.index == widget.currentIndex;
+        final task = widget.tasks[segment.index];
         
         return _SegmentItem(
+          key: _getKeyForIndex(segment.index),
           segment: segment,
           isPlaying: isPlaying,
           task: task,
-          onTap: () => onSegmentTap(segment.index),
+          onTap: () => widget.onSegmentTap(segment.index),
         );
       },
     );
@@ -56,7 +100,7 @@ class SegmentList extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Center(
-        child: loadingMore
+        child: widget.loadingMore
             ? Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -95,6 +139,7 @@ class _SegmentItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const _SegmentItem({
+    super.key,
     required this.segment,
     required this.isPlaying,
     this.task,
