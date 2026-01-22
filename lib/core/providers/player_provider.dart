@@ -215,17 +215,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         );
       },
       (int newIndex) async {
-        state = state.copyWith(
-          currentSegmentIndex: newIndex,
-        );
-
         // 检查是否需要加载新段落
         if (newIndex < state.loadedStart || newIndex >= state.loadedEnd) {
           await _loadSegments(startIndex: (newIndex - 5).clamp(0, newIndex), replace: true);
         }
         
-        // 段落加载完成后再设置滚动目标
-        state = state.copyWith(scrollToSegment: newIndex);
+        // 段落加载完成后再更新索引和设置滚动目标，确保滑块和可见内容同步
+        state = state.copyWith(
+          currentSegmentIndex: newIndex,
+          scrollToSegment: newIndex,
+        );
 
         _submitPrefetchTasks();
       },

@@ -130,6 +130,21 @@ class NovelDeleteFailedEvent extends WsEvent {
   }
 }
 
+/// 音色创建完成事件
+class VoiceCreatedEvent extends WsEvent {
+  final String voiceId;
+  final String name;
+
+  VoiceCreatedEvent({required this.voiceId, required this.name});
+
+  factory VoiceCreatedEvent.fromJson(Map<String, dynamic> json) {
+    return VoiceCreatedEvent(
+      voiceId: json['voice_id'] as String,
+      name: json['name'] as String,
+    );
+  }
+}
+
 /// 音色已删除事件
 class VoiceDeletedEvent extends WsEvent {
   final String voiceId;
@@ -150,28 +165,78 @@ class WsErrorEvent extends WsEvent {
 }
 
 /// 解析 WebSocket 事件
+/// 新格式: { "event": "Session"|"Novel"|"Voice", "data": { "type": "具体类型", ...fields } }
 WsEvent? parseWsEvent(String data) {
-  final json = jsonDecode(data) as Map<String, dynamic>;
-  final event = json['event'] as String;
-  final eventData = json['data'] as Map<String, dynamic>;
+  debugPrint('WS_EVENT: $data');
+  try {
+    final json = jsonDecode(data) as Map<String, dynamic>;
+    final event = json['event'] as String?;
+    final eventData = json['data'] as Map<String, dynamic>?;
+    
+    if (event == null || eventData == null) {
+      debugPrint('WS_EVENT: Invalid format - event: $event, data: $eventData');
+      return null;
+    }
+    
+    final type = eventData['type'] as String?;
+    if (type == null) {
+      debugPrint('WS_EVENT: Missing type in data');
+      return null;
+    }
 
-  switch (event) {
+    debugPrint('WS_EVENT: Parsed event=$event, type=$type');
+
+    switch (event) {
+      case 'Session':
+        return _parseSessionEvent(type, eventData);
+      case 'Novel':
+        return _parseNovelEvent(type, eventData);
+      case 'Voice':
+        return _parseVoiceEvent(type, eventData);
+      default:
+        debugPrint('WS_EVENT: Unknown category: $event');
+        return null;
+    }
+  } catch (e, stack) {
+    debugPrint('WS_EVENT: Error parsing: $e\n$stack');
+    return null;
+  }
+}
+
+WsEvent? _parseSessionEvent(String type, Map<String, dynamic> data) {
+  switch (type) {
     case 'TaskStateChanged':
-      return TaskStateChangedEvent.fromJson(eventData);
+      return TaskStateChangedEvent.fromJson(data);
     case 'SessionClosed':
-      return SessionClosedEvent.fromJson(eventData);
-    case 'NovelReady':
-      return NovelReadyEvent.fromJson(eventData);
-    case 'NovelFailed':
-      return NovelFailedEvent.fromJson(eventData);
-    case 'NovelDeleting':
-      return NovelDeletingEvent.fromJson(eventData);
-    case 'NovelDeleted':
-      return NovelDeletedEvent.fromJson(eventData);
-    case 'NovelDeleteFailed':
-      return NovelDeleteFailedEvent.fromJson(eventData);
-    case 'VoiceDeleted':
-      return VoiceDeletedEvent.fromJson(eventData);
+      return SessionClosedEvent.fromJson(data);
+    default:
+      return null;
+  }
+}
+
+WsEvent? _parseNovelEvent(String type, Map<String, dynamic> data) {
+  switch (type) {
+    case 'Ready':
+      return NovelReadyEvent.fromJson(data);
+    case 'Failed':
+      return NovelFailedEvent.fromJson(data);
+    case 'Deleting':
+      return NovelDeletingEvent.fromJson(data);
+    case 'Deleted':
+      return NovelDeletedEvent.fromJson(data);
+    case 'DeleteFailed':
+      return NovelDeleteFailedEvent.fromJson(data);
+    default:
+      return null;
+  }
+}
+
+WsEvent? _parseVoiceEvent(String type, Map<String, dynamic> data) {
+  switch (type) {
+    case 'Created':
+      return VoiceCreatedEvent.fromJson(data);
+    case 'Deleted':
+      return VoiceDeletedEvent.fromJson(data);
     default:
       return null;
   }
@@ -241,6 +306,8 @@ class WebSocketService {
 
     _globalChannel!.stream.listen(
       (data) {
+        // ignore: avoid_print
+        debugPrint('WS_GLOBAL_RAW: $data');
         final event = parseWsEvent(data as String);
         if (event != null) {
           _globalEventController.add(event);
@@ -306,6 +373,7 @@ class WebSocketService {
 
     _sessionChannel!.stream.listen(
       (data) {
+        debugPrint('WS_SESSION_RAW: $data');
         if (_sessionState != WsConnectionState.connected) {
           _sessionState = WsConnectionState.connected;
           _sessionEventController.add(WsConnectedEvent());

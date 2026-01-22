@@ -48,15 +48,18 @@ class _SegmentListState extends State<SegmentList> {
     if (widget.scrollToIndex != null && 
         widget.scrollToIndex != _lastScrolledToIndex) {
       _lastScrolledToIndex = widget.scrollToIndex;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToSegment(widget.scrollToIndex!);
-      });
+      // 尝试立即滚动，如果目标尚未渲染则延迟到下一帧
+      if (!_scrollToSegment(widget.scrollToIndex!)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToSegment(widget.scrollToIndex!);
+        });
+      }
     }
   }
 
-  void _scrollToSegment(int segmentIndex) {
+  bool _scrollToSegment(int segmentIndex) {
     final key = _itemKeys[segmentIndex];
-    if (key?.currentContext == null) return;
+    if (key?.currentContext == null) return false;
     
     Scrollable.ensureVisible(
       key!.currentContext!,
@@ -66,6 +69,7 @@ class _SegmentListState extends State<SegmentList> {
     ).then((_) {
       widget.onScrollCompleted?.call();
     });
+    return true;
   }
 
   @override
