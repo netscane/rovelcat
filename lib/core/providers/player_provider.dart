@@ -553,10 +553,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 }
 
-/// 播放器 Provider
-final playerProvider = StateNotifierProvider<PlayerNotifier, PlayerState>((ref) {
-  return PlayerNotifier(
+/// 播放器 Provider (autoDispose: 离开页面时自动销毁，避免 defunct element 错误)
+final playerProvider = StateNotifierProvider.autoDispose<PlayerNotifier, PlayerState>((ref) {
+  final notifier = PlayerNotifier(
     ref.watch(apiServiceProvider),
     ref.watch(webSocketServiceProvider),
   );
+  ref.onDispose(() {
+    notifier.stopPlayback();
+  });
+  return notifier;
 });
