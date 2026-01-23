@@ -116,6 +116,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _cleanupTimer = Timer.periodic(const Duration(seconds: 5), (_) => _cleanupTasks());
   }
 
+  /// 安全地更新 state，在 disposed 后忽略
+  void _safeSetState(PlayerState newState) {
+    if (_disposed || !mounted) return;
+    state = newState;
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -376,11 +382,13 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     // 提交任务
     _api.submitInfer(state.session!.sessionId, indices).then((result) {
+      if (_disposed || !mounted) return;
       result.fold(
         (error) {
           debugPrint('Submit infer error: $error');
         },
         (List<TaskInfo> taskInfos) {
+          if (_disposed || !mounted) return;
           final tasks = Map<int, SegmentTask>.from(state.tasks);
           for (final info in taskInfos) {
             final task = tasks[info.segmentIndex];
@@ -398,14 +406,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
               _loadAndPlayAudio(state.currentSegmentIndex);
             }
           }
-          state = state.copyWith(tasks: tasks);
+          _safeSetState(state.copyWith(tasks: tasks));
         },
       );
     });
   }
 
   Future<void> _loadAndPlayAudio(int segmentIndex) async {
-    if (_disposed || state.session == null) return;
+    if (_disposed || !mounted || state.session == null) return;
 
     final data = await _api.getAudio(
       state.session!.novelId,
@@ -413,19 +421,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       state.voice!.id,
     );
 
-    if (_disposed) return;
+    if (_disposed || !mounted) return;
     
     if (data == null) {
-      state = state.copyWith(waitingForAudio: true);
+      _safeSetState(state.copyWith(waitingForAudio: true));
       return;
     }
 
     await _playAudioData(data);
-    if (_disposed) return;
-    state = state.copyWith(
+    if (_disposed || !mounted) return;
+    _safeSetState(state.copyWith(
       waitingForAudio: false,
       playbackState: PlaybackState.playing,
-    );
+    ));
   }
 
   Future<void> _playAudioData(Uint8List data) async {
@@ -436,19 +444,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   void _handlePlayerState(just_audio.PlayerState playerState) {
-    if (_disposed) return;
+    if (_disposed || !mounted) return;
     if (playerState.processingState == just_audio.ProcessingState.completed) {
       _onAudioFinished();
     }
   }
 
   void _onAudioFinished() {
-    if (_disposed) return;
+    if (_disposed || !mounted) return;
     debugPrint('_onAudioFinished called: playbackState=${state.playbackState}');
     if (state.playbackState != PlaybackState.playing) return;
 
     if (state.currentSegmentIndex + 1 >= state.totalSegments) {
-      state = state.copyWith(playbackState: PlaybackState.stopped);
+      _safeSetState(state.copyWith(playbackState: PlaybackState.stopped));
       return;
     }
 
@@ -457,30 +465,32 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     
     // 只有在没有手动滚动请求时才自动滚动
     if (state.scrollToSegment == null) {
-      state = state.copyWith(
+      _safeSetState(state.copyWith(
         currentSegmentIndex: nextIndex,
         scrollToSegment: nextIndex,
-      );
+      ));
     } else {
       // 如果有手动滚动请求，只更新索引，不覆盖滚动目标
-      state = state.copyWith(currentSegmentIndex: nextIndex);
+      _safeSetState(state.copyWith(currentSegmentIndex: nextIndex));
     }
 
+    if (_disposed || !mounted) return;
+    
     // 检查是否就绪
     if (state.isSegmentReady(nextIndex)) {
       _loadAndPlayAudio(nextIndex);
     } else {
-      state = state.copyWith(
+      _safeSetState(state.copyWith(
         playbackState: PlaybackState.loading,
         waitingForAudio: true,
-      );
+      ));
     }
 
     _submitPrefetchTasks();
   }
 
   void _handleWsEvent(WsEvent event) {
-    if (_disposed) return;
+    if (_disposed || !mounted) return;
     
     if (event is TaskStateChangedEvent) {
       if (state.session == null) return;
@@ -506,8 +516,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           createdAt: DateTime.now(),
         );
       }
-      if (_disposed) return;
-      state = state.copyWith(tasks: tasks);
+      if (_disposed || !mounted) return;
+      _safeSetState(state.copyWith(tasks: tasks));
 
       // 检查当前段落是否就绪
       if (event.segmentIndex == state.currentSegmentIndex &&
@@ -516,20 +526,20 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _loadAndPlayAudio(state.currentSegmentIndex);
       }
     } else if (event is SessionClosedEvent) {
-      if (_disposed) return;
+      if (_disposed || !mounted) return;
       if (state.session?.sessionId == event.sessionId) {
-        state = state.copyWith(
+        _safeSetState(state.copyWith(
           session: null,
           playbackState: PlaybackState.stopped,
           tasks: {},
           error: 'Session closed: ${event.reason}',
-        );
+        ));
       }
     }
   }
 
   void _prefetchTasks() {
-    if (_disposed) return;
+    if (_disposed || !mounted) return;
     if (state.playbackState != PlaybackState.playing && 
         state.playbackState != PlaybackState.loading) {
       return;
@@ -539,7 +549,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   void _cleanupTasks() {
-    if (_disposed) return;
+    if (_disposed || !mounted) return;
     final now = DateTime.now();
     final tasks = Map<int, SegmentTask>.from(state.tasks);
     final originalLength = tasks.length;
@@ -547,8 +557,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         task.state == TaskState.pending && 
         now.difference(task.createdAt) > const Duration(seconds: 30));
     // 只有在有变化且未被销毁时才更新 state
-    if (!_disposed && tasks.length != originalLength) {
-      state = state.copyWith(tasks: tasks);
+    if (!_disposed && mounted && tasks.length != originalLength) {
+      _safeSetState(state.copyWith(tasks: tasks));
     }
   }
 }
