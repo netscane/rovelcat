@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../novel/novel_page.dart';
 import '../voice/voice_page.dart';
+import '../batch/batch_task_page.dart';
 import '../settings/settings_page.dart';
 
 /// 底部导航索引
@@ -22,6 +23,7 @@ class HomePage extends ConsumerWidget {
         children: const [
           NovelPage(),
           VoicePage(),
+          BatchTaskPage(),
           SettingsPage(),
         ],
       ),
@@ -52,6 +54,17 @@ class HomePage extends ConsumerWidget {
               color: colorScheme.onSecondaryContainer,
             ),
             label: '音色',
+          ),
+          NavigationDestination(
+            icon: Icon(
+              Icons.flash_on_outlined,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            selectedIcon: Icon(
+              Icons.flash_on,
+              color: colorScheme.onSecondaryContainer,
+            ),
+            label: '任务',
           ),
           NavigationDestination(
             icon: Icon(

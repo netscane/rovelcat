@@ -7,6 +7,7 @@ import '../models/voice.dart';
 import '../models/segment.dart';
 import '../models/play_session.dart';
 import '../models/segment_task.dart';
+import '../models/batch_task.dart';
 
 /// 结果类型：Either 的简化实现
 class Result<T> {
@@ -318,6 +319,97 @@ class ApiService {
     }
 
     return response.data as Uint8List;
+  }
+
+  // ========== Batch Task APIs ==========
+
+  /// 创建批量推理任务
+  Future<Result<BatchTask>> createBatchTask(
+    String novelId,
+    String voiceId, {
+    int segmentStart = 0,
+    int? segmentEnd,
+  }) async {
+    final response = await _dio.post('/batch', data: {
+      'novel_id': novelId,
+      'voice_id': voiceId,
+      'segment_start': segmentStart,
+      if (segmentEnd != null) 'segment_end': segmentEnd,
+    });
+    final apiResp = ApiResponse<BatchTask>.fromJson(
+      response.data,
+      (data) => BatchTask.fromJson(data as Map<String, dynamic>),
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(apiResp.error);
+    }
+    return Result.success(apiResp.data!);
+  }
+
+  /// 获取所有批量任务列表
+  Future<Result<List<BatchTask>>> listBatchTasks() async {
+    final response = await _dio.get('/batch');
+    final apiResp = ApiResponse<List<BatchTask>>.fromJson(
+      response.data,
+      (data) =>
+          (data as List).map((e) => BatchTask.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(apiResp.error);
+    }
+    return Result.success(apiResp.data ?? []);
+  }
+
+  /// 获取单个批量任务状态
+  Future<Result<BatchTask>> getBatchTask(String taskId) async {
+    final response = await _dio.get('/batch/$taskId');
+    final apiResp = ApiResponse<BatchTask>.fromJson(
+      response.data,
+      (data) => BatchTask.fromJson(data as Map<String, dynamic>),
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(apiResp.error);
+    }
+    return Result.success(apiResp.data!);
+  }
+
+  /// 暂停批量任务
+  Future<Result<BatchTask>> pauseBatchTask(String taskId) async {
+    final response = await _dio.post('/batch/$taskId/pause');
+    final apiResp = ApiResponse<BatchTask>.fromJson(
+      response.data,
+      (data) => BatchTask.fromJson(data as Map<String, dynamic>),
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(apiResp.error);
+    }
+    return Result.success(apiResp.data!);
+  }
+
+  /// 恢复批量任务
+  Future<Result<BatchTask>> resumeBatchTask(String taskId) async {
+    final response = await _dio.post('/batch/$taskId/resume');
+    final apiResp = ApiResponse<BatchTask>.fromJson(
+      response.data,
+      (data) => BatchTask.fromJson(data as Map<String, dynamic>),
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(apiResp.error);
+    }
+    return Result.success(apiResp.data!);
+  }
+
+  /// 取消批量任务
+  Future<Result<BatchTask>> cancelBatchTask(String taskId) async {
+    final response = await _dio.post('/batch/$taskId/cancel');
+    final apiResp = ApiResponse<BatchTask>.fromJson(
+      response.data,
+      (data) => BatchTask.fromJson(data as Map<String, dynamic>),
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(apiResp.error);
+    }
+    return Result.success(apiResp.data!);
   }
 }
 

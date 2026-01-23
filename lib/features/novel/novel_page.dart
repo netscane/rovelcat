@@ -9,6 +9,7 @@ import '../../data/services/websocket_service.dart';
 import 'widgets/novel_grid_view.dart';
 import 'widgets/novel_list_view.dart';
 import 'widgets/upload_novel_dialog.dart';
+import 'widgets/batch_preheat_dialog.dart';
 import '../player/player_page.dart';
 
 /// 小说页面
@@ -118,6 +119,45 @@ class _NovelPageState extends ConsumerState<NovelPage> {
         },
       );
     }
+  }
+
+  void _showNovelOptions(Novel novel) {
+    if (!novel.canPlay) return;
+    
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.flash_on),
+              title: const Text('批量预热'),
+              subtitle: const Text('提前生成音频，加快播放速度'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _showBatchPreheatDialog(novel);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+              title: Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _deleteNovel(novel);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showBatchPreheatDialog(Novel novel) {
+    showDialog(
+      context: context,
+      builder: (context) => BatchPreheatDialog(novel: novel),
+    );
   }
 
   @override
@@ -240,13 +280,13 @@ class _NovelPageState extends ConsumerState<NovelPage> {
       return NovelGridView(
         novels: state.novels,
         onTap: _openNovel,
-        onLongPress: _deleteNovel,
+        onLongPress: _showNovelOptions,
       );
     } else {
       return NovelListView(
         novels: state.novels,
         onTap: _openNovel,
-        onLongPress: _deleteNovel,
+        onLongPress: _showNovelOptions,
       );
     }
   }
