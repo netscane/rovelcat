@@ -129,9 +129,14 @@ class BatchTask {
   /// 是否可以恢复
   bool get canResume => status == BatchTaskStatus.paused;
 
-  /// 是否可以取消
+  /// 是否可以取消 (现在支持 failed 状态)
   bool get canCancel =>
-      status == BatchTaskStatus.running || status == BatchTaskStatus.paused;
+      status == BatchTaskStatus.running ||
+      status == BatchTaskStatus.paused ||
+      status == BatchTaskStatus.failed;
+
+  /// 是否可以重试 (仅 failed 状态)
+  bool get canRetry => status == BatchTaskStatus.failed;
 
   /// 是否已结束
   bool get isFinished =>

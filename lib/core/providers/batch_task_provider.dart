@@ -140,6 +140,18 @@ class BatchTaskListNotifier extends StateNotifier<BatchTaskListState> {
     );
   }
 
+  /// 重试失败的任务
+  Future<String?> retryTask(String taskId) async {
+    final result = await _api.retryBatchTask(taskId);
+    return result.fold(
+      (error) => error,
+      (task) {
+        _updateTask(task);
+        return null;
+      },
+    );
+  }
+
   void _updateTask(BatchTask task) {
     final tasks = state.tasks.map((t) {
       return t.taskId == task.taskId ? task : t;

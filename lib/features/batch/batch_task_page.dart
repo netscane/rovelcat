@@ -270,7 +270,7 @@ class _BatchTaskItem extends ConsumerWidget {
               ],
 
               // 操作按钮
-              if (!task.isFinished) ...[
+              if (!task.isFinished || task.canRetry || task.canCancel) ...[
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -286,6 +286,12 @@ class _BatchTaskItem extends ConsumerWidget {
                         onPressed: () => _resumeTask(ref, task.taskId, context),
                         icon: const Icon(Icons.play_arrow, size: 18),
                         label: const Text('恢复'),
+                      ),
+                    if (task.canRetry)
+                      TextButton.icon(
+                        onPressed: () => _retryTask(ref, task.taskId, context),
+                        icon: Icon(Icons.refresh, size: 18, color: colorScheme.primary),
+                        label: Text('重试', style: TextStyle(color: colorScheme.primary)),
                       ),
                     if (task.canCancel)
                       TextButton.icon(
@@ -347,6 +353,15 @@ class _BatchTaskItem extends ConsumerWidget {
           SnackBar(content: Text('取消失败: $error')),
         );
       }
+    }
+  }
+
+  Future<void> _retryTask(WidgetRef ref, String taskId, BuildContext context) async {
+    final error = await ref.read(batchTaskListProvider.notifier).retryTask(taskId);
+    if (error != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('重试失败: $error')),
+      );
     }
   }
 }

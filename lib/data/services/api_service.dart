@@ -399,9 +399,22 @@ class ApiService {
     return Result.success(apiResp.data!);
   }
 
-  /// 取消批量任务
+  /// 取消批量任务 (支持 Pending/Running/Paused/Failed → Cancelled)
   Future<Result<BatchTask>> cancelBatchTask(String taskId) async {
     final response = await _dio.post('/batch/$taskId/cancel');
+    final apiResp = ApiResponse<BatchTask>.fromJson(
+      response.data,
+      (data) => BatchTask.fromJson(data as Map<String, dynamic>),
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(apiResp.error);
+    }
+    return Result.success(apiResp.data!);
+  }
+
+  /// 重试失败的批量任务 (仅从 Failed → Running)
+  Future<Result<BatchTask>> retryBatchTask(String taskId) async {
+    final response = await _dio.post('/batch/$taskId/retry');
     final apiResp = ApiResponse<BatchTask>.fromJson(
       response.data,
       (data) => BatchTask.fromJson(data as Map<String, dynamic>),
