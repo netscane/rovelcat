@@ -23,7 +23,6 @@ class PlayerState {
   final int currentSegmentIndex;
   final PlaybackState playbackState;
   final bool waitingForAudio;
-  final int? scrollToSegment;
   final String? error;
 
   // 分页相关
@@ -36,6 +35,9 @@ class PlayerState {
   // 任务管理
   final Map<int, SegmentTask> tasks;
 
+  // Session 版本，用于防止旧 WS 事件污染新状态
+  final int version;
+
   const PlayerState({
     this.session,
     this.novel,
@@ -44,7 +46,6 @@ class PlayerState {
     this.currentSegmentIndex = 0,
     this.playbackState = PlaybackState.stopped,
     this.waitingForAudio = false,
-    this.scrollToSegment,
     this.error,
     this.totalSegments = 0,
     this.loadedStart = 0,
@@ -52,6 +53,7 @@ class PlayerState {
     this.hasMore = false,
     this.loadingMore = false,
     this.tasks = const {},
+    this.version = 0,
   });
 
   PlayerState copyWith({
@@ -62,7 +64,6 @@ class PlayerState {
     int? currentSegmentIndex,
     PlaybackState? playbackState,
     bool? waitingForAudio,
-    int? scrollToSegment,
     String? error,
     int? totalSegments,
     int? loadedStart,
@@ -70,6 +71,7 @@ class PlayerState {
     bool? hasMore,
     bool? loadingMore,
     Map<int, SegmentTask>? tasks,
+    int? version,
   }) {
     return PlayerState(
       session: session ?? this.session,
@@ -79,7 +81,6 @@ class PlayerState {
       currentSegmentIndex: currentSegmentIndex ?? this.currentSegmentIndex,
       playbackState: playbackState ?? this.playbackState,
       waitingForAudio: waitingForAudio ?? this.waitingForAudio,
-      scrollToSegment: scrollToSegment,
       error: error,
       totalSegments: totalSegments ?? this.totalSegments,
       loadedStart: loadedStart ?? this.loadedStart,
@@ -87,6 +88,7 @@ class PlayerState {
       hasMore: hasMore ?? this.hasMore,
       loadingMore: loadingMore ?? this.loadingMore,
       tasks: tasks ?? this.tasks,
+      version: version ?? this.version,
     );
   }
 
@@ -106,63 +108,123 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   Timer? _prefetchTimer;
   Timer? _cleanupTimer;
   bool _disposed = false;
+  bool _isStopping = false;
+  int _version = 0;
+  String? _sessionId;
 
   static const int _prefetchAhead = 3;
   static const int _pageSize = 30;
 
   PlayerNotifier(this._api, this._wsService) : super(const PlayerState()) {
     _playerSub = _audioPlayer.playerStateStream.listen(_handlePlayerState);
-    _prefetchTimer = Timer.periodic(const Duration(seconds: 1), (_) => _prefetchTasks());
-    _cleanupTimer = Timer.periodic(const Duration(seconds: 5), (_) => _cleanupTasks());
+    _prefetchTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _prefetchTasks(),
+    );
+    _cleanupTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _cleanupTasks(),
+    );
   }
 
-  /// 安全地更新 state，在 disposed 后忽略
+  /// 安全地更新 state
   void _safeSetState(PlayerState newState) {
     if (_disposed || !mounted) return;
-    state = newState;
+
+    try {
+      state = newState;
+    } catch (e) {
+      // 捕获所有错误
+      if (!e.toString().contains('defunct')) {
+        debugPrint('Error updating state: $e');
+      }
+    }
   }
 
   @override
   void dispose() {
     _disposed = true;
+
+    // 取消所有订阅
     _wsSub?.cancel();
+    _wsSub = null;
     _playerSub?.cancel();
+    _playerSub = null;
+
+    // 尝试关闭会话 (Fire and forget)
+    if (_sessionId != null) {
+      _api
+          .closeSession(_sessionId!)
+          .then(
+            (_) {},
+            onError: (e) {
+              debugPrint('Error closing session on dispose: $e');
+            },
+          );
+      _sessionId = null;
+    }
+
     _prefetchTimer?.cancel();
     _cleanupTimer?.cancel();
     _audioPlayer.dispose();
     _wsService.disconnectSession();
-    super.dispose();
+
+    // 只有在 mounted 时才调用 super.dispose()，避免 Riverpod 已 dispose 后重复调用
+    if (mounted) {
+      super.dispose();
+    }
   }
 
   /// 开始播放
-  Future<void> startPlayback(Novel novel, Voice voice, {int startIndex = 0}) async {
-    state = state.copyWith(
-      novel: novel,
-      voice: voice,
-      segments: [],
-      currentSegmentIndex: startIndex,
-      playbackState: PlaybackState.loading,
-      waitingForAudio: true,
-      totalSegments: novel.totalSegments,
-      loadedStart: 0,
-      loadedEnd: 0,
-      hasMore: true,
-      tasks: {},
-      error: null,
+  Future<void> startPlayback(
+    Novel novel,
+    Voice voice, {
+    int startIndex = 0,
+  }) async {
+    if (_disposed) return;
+
+    _isStopping = false;
+
+    // 确保音频播放器监听器已设置
+    _playerSub ??= _audioPlayer.playerStateStream.listen(_handlePlayerState);
+
+    _version++;
+    _safeSetState(
+      state.copyWith(
+        novel: novel,
+        voice: voice,
+        segments: [],
+        currentSegmentIndex: startIndex,
+        playbackState: PlaybackState.loading,
+        waitingForAudio: true,
+        totalSegments: novel.totalSegments,
+        loadedStart: 0,
+        loadedEnd: 0,
+        hasMore: true,
+        tasks: {},
+        error: null,
+        version: _version,
+      ),
     );
 
     final result = await _api.createSession(novel.id, voice.id, startIndex);
+    if (_disposed || !mounted) return;
+
     await result.fold(
       (error) async {
-        state = state.copyWith(
-          playbackState: PlaybackState.stopped,
-          error: error,
+        if (_disposed || !mounted) return;
+        _safeSetState(
+          state.copyWith(playbackState: PlaybackState.stopped, error: error),
         );
       },
       (PlaySession session) async {
-        state = state.copyWith(
-          session: session,
-          currentSegmentIndex: session.currentIndex,
+        if (_disposed || !mounted) return;
+        _sessionId = session.sessionId;
+        _safeSetState(
+          state.copyWith(
+            session: session,
+            currentSegmentIndex: session.currentIndex,
+          ),
         );
 
         // 连接 WebSocket
@@ -176,62 +238,110 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     );
   }
 
+  /// 从历史记录恢复播放
+  Future<void> restoreFromHistory({
+    required String novelId,
+    required int segmentIndex,
+    required String voiceId,
+  }) async {
+    // 这个方法只是标记 - 实际恢复由外部调用 startPlayback 时传入正确的参数
+    // 保留此方法为未来的状态持久化扩展预留接口
+    debugPrint('restoreFromHistory: novelId=$novelId, segmentIndex=$segmentIndex, voiceId=$voiceId');
+  }
+
   /// 停止播放
-  Future<void> stopPlayback() async {
+  Future<void> stopPlayback({bool clearState = true}) async {
+    if (_disposed) return;
+
+    // 立即标记为正在停止，防止任何事件处理
+    _isStopping = true;
+
+    // 使用 _sessionId 而不是 state.session?.sessionId
+    final sessionId = _sessionId;
+
+    // 先取消订阅，防止音频播放器事件在停止过程中继续触发
+    _playerSub?.cancel();
+    _playerSub = null;
+
     await _audioPlayer.stop();
-    
-    if (state.session != null) {
-      await _api.closeSession(state.session!.sessionId);
-      _wsService.disconnectSession();
+
+    if (sessionId != null) {
+      // 先取消 WS 订阅并断开连接，防止在 closeSession 期间收到新事件
       _wsSub?.cancel();
+      _wsSub = null;
+      _wsService.disconnectSession();
+
+      // 再关闭后端会话
+      await _api.closeSession(sessionId);
+      _sessionId = null; // 清除 sessionId
     }
 
-    state = const PlayerState();
+    if (clearState) {
+      _safeSetState(const PlayerState());
+    }
+
+    // 保持 _isStopping = true，防止延迟事件在导航期间触发状态更新
+    // _isStopping 会在下次 startPlayback 时重置
   }
 
   /// 暂停播放
   void pausePlayback() {
     if (_disposed) return;
     _audioPlayer.pause();
-    state = state.copyWith(playbackState: PlaybackState.paused);
+    _safeSetState(state.copyWith(playbackState: PlaybackState.paused));
   }
 
   /// 恢复播放
   void resumePlayback() {
     if (_disposed) return;
-    _audioPlayer.play();
-    state = state.copyWith(playbackState: PlaybackState.playing);
+    if (_audioPlayer.playing == false &&
+        _audioPlayer.processingState == just_audio.ProcessingState.ready) {
+      _audioPlayer.play();
+      _safeSetState(state.copyWith(playbackState: PlaybackState.playing));
+    }
   }
 
   /// 跳转到指定段落
   Future<void> seekTo(int index) async {
-    if (state.session == null) return;
+    if (_disposed || state.session == null) return;
 
+    debugPrint('PlayerNotifier.seekTo(): index=$index, sessionId=${state.session!.sessionId}');
+    _version++;
     await _audioPlayer.stop();
-    state = state.copyWith(
-      playbackState: PlaybackState.loading,
-      waitingForAudio: true,
-      tasks: {},
+    _safeSetState(
+      state.copyWith(
+        playbackState: PlaybackState.loading,
+        waitingForAudio: true,
+        tasks: {},
+        version: _version,
+      ),
     );
 
     final result = await _api.seek(state.session!.sessionId, index);
+    if (_disposed || !mounted) return;
+    debugPrint('PlayerNotifier.seekTo(): API result received');
     await result.fold(
       (error) async {
-        state = state.copyWith(
-          playbackState: PlaybackState.stopped,
-          error: error,
+        if (_disposed || !mounted) return;
+        debugPrint('PlayerNotifier.seekTo(): error=$error');
+        _safeSetState(
+          state.copyWith(playbackState: PlaybackState.stopped, error: error),
         );
       },
       (int newIndex) async {
+        if (_disposed || !mounted) return;
+        debugPrint('PlayerNotifier.seekTo(): success, newIndex=$newIndex');
         // 检查是否需要加载新段落
         if (newIndex < state.loadedStart || newIndex >= state.loadedEnd) {
-          await _loadSegments(startIndex: (newIndex - 5).clamp(0, newIndex), replace: true);
+          await _loadSegments(
+            startIndex: (newIndex - 5).clamp(0, newIndex),
+            replace: true,
+          );
         }
-        
-        // 段落加载完成后再更新索引和设置滚动目标，确保滑块和可见内容同步
-        state = state.copyWith(
-          currentSegmentIndex: newIndex,
-          scrollToSegment: newIndex,
+
+        // 更新当前索引
+        _safeSetState(
+          state.copyWith(currentSegmentIndex: newIndex),
         );
 
         _submitPrefetchTasks();
@@ -241,19 +351,22 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 切换音色
   Future<void> changeVoice(Voice voice) async {
-    if (state.session == null) return;
+    if (_disposed || state.session == null) return;
 
-    state = state.copyWith(
-      voice: voice,
-      playbackState: PlaybackState.loading,
-      waitingForAudio: true,
-      tasks: {},
+    _safeSetState(
+      state.copyWith(
+        voice: voice,
+        playbackState: PlaybackState.loading,
+        waitingForAudio: true,
+        tasks: {},
+      ),
     );
 
     final result = await _api.changeVoice(state.session!.sessionId, voice.id);
+    if (_disposed) return;
     result.fold(
       (error) {
-        state = state.copyWith(error: error);
+        _safeSetState(state.copyWith(error: error));
       },
       (_) {
         _submitPrefetchTasks();
@@ -263,27 +376,29 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 加载更多段落
   Future<void> loadMoreSegments() async {
-    if (state.loadingMore || !state.hasMore || state.session == null) return;
+    if (_disposed ||
+        state.loadingMore ||
+        !state.hasMore ||
+        state.session == null) {
+      return;
+    }
 
-    state = state.copyWith(loadingMore: true);
+    _safeSetState(state.copyWith(loadingMore: true));
     await _loadSegments(startIndex: state.loadedEnd, append: true);
-  }
-
-  /// 清除滚动目标
-  void clearScrollToSegment() {
-    state = state.copyWith(scrollToSegment: null);
   }
 
   /// 从停止状态开始播放
   void startPlayingFromStopped() {
-    if (state.session == null) return;
+    if (_disposed || state.session == null) return;
 
     if (state.isSegmentReady(state.currentSegmentIndex)) {
       _loadAndPlayAudio(state.currentSegmentIndex);
     } else {
-      state = state.copyWith(
-        playbackState: PlaybackState.loading,
-        waitingForAudio: true,
+      _safeSetState(
+        state.copyWith(
+          playbackState: PlaybackState.loading,
+          waitingForAudio: true,
+        ),
       );
       _submitPrefetchTasks();
     }
@@ -296,7 +411,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     bool replace = false,
     bool append = false,
   }) async {
-    if (state.session == null) return;
+    if (_disposed || state.session == null) return;
 
     final result = await _api.getSegments(
       state.session!.novelId,
@@ -304,16 +419,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       limit: _pageSize,
     );
 
+    if (_disposed) return;
+
     result.fold(
       (error) {
-        state = state.copyWith(
-          loadingMore: false,
-          error: error,
+        if (_disposed || !mounted) return;
+        _safeSetState(
+          state.copyWith(loadingMore: false, error: error),
         );
       },
       (SegmentsResponse data) {
+        if (_disposed || !mounted) return;
         final newSegments = data.segments;
-        
+
         List<Segment> segments;
         int loadedStart;
         int loadedEnd;
@@ -321,27 +439,37 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         if (replace || state.segments.isEmpty) {
           segments = newSegments;
           loadedStart = newSegments.isNotEmpty ? newSegments.first.index : 0;
-          loadedEnd = loadedStart + newSegments.length;
+          loadedEnd = newSegments.isNotEmpty
+              ? newSegments.last.index + 1
+              : loadedStart;
         } else if (append) {
           segments = [...state.segments, ...newSegments];
           loadedStart = state.loadedStart;
-          loadedEnd = state.loadedStart + segments.length;
+          loadedEnd = segments.isNotEmpty
+              ? segments.last.index + 1
+              : loadedStart;
         } else {
           segments = newSegments;
           loadedStart = newSegments.isNotEmpty ? newSegments.first.index : 0;
-          loadedEnd = loadedStart + newSegments.length;
+          loadedEnd = newSegments.isNotEmpty
+              ? newSegments.last.index + 1
+              : loadedStart;
         }
 
         // 使用 API 返回的 total，但如果已有正确的 totalSegments 则保留
-        final total = state.totalSegments > 0 ? state.totalSegments : data.total;
+        final total = state.totalSegments > 0
+            ? state.totalSegments
+            : data.total;
 
-        state = state.copyWith(
-          segments: segments,
-          totalSegments: total,
-          loadedStart: loadedStart,
-          loadedEnd: loadedEnd,
-          hasMore: loadedEnd < total,
-          loadingMore: false,
+        _safeSetState(
+          state.copyWith(
+            segments: segments,
+            totalSegments: total,
+            loadedStart: loadedStart,
+            loadedEnd: loadedEnd,
+            hasMore: loadedEnd < total,
+            loadingMore: false,
+          ),
         );
 
         // 初始加载时提交预取任务
@@ -353,21 +481,26 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   void _submitPrefetchTasks() {
-    if (state.session == null) return;
+    if (_disposed || state.session == null) return;
 
     final indices = <int>[];
-    final end = (state.currentSegmentIndex + _prefetchAhead + 1)
-        .clamp(0, state.totalSegments);
-    
+    final end = (state.currentSegmentIndex + _prefetchAhead + 1).clamp(
+      0,
+      state.totalSegments,
+    );
+
     for (int i = state.currentSegmentIndex; i < end; i++) {
-      if (!state.tasks.containsKey(i)) {
+      final task = state.tasks[i];
+      if (task == null ||
+          (task.state != TaskState.pending &&
+              task.state != TaskState.inferring &&
+              task.state != TaskState.ready)) {
         indices.add(i);
       }
     }
 
     if (indices.isEmpty) return;
 
-    // 添加 pending 任务
     final tasks = Map<int, SegmentTask>.from(state.tasks);
     final now = DateTime.now();
     for (final idx in indices) {
@@ -376,11 +509,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         segmentIndex: idx,
         state: TaskState.pending,
         createdAt: now,
+        version: state.version,
       );
     }
-    state = state.copyWith(tasks: tasks);
+    _safeSetState(state.copyWith(tasks: tasks));
 
-    // 提交任务
     _api.submitInfer(state.session!.sessionId, indices).then((result) {
       if (_disposed || !mounted) return;
       result.fold(
@@ -399,10 +532,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
               );
             }
 
-            // 如果当前段落已经就绪，开始播放
             if (info.segmentIndex == state.currentSegmentIndex &&
                 info.state == 'ready' &&
-                (state.waitingForAudio || state.playbackState == PlaybackState.loading)) {
+                (state.waitingForAudio ||
+                    state.playbackState == PlaybackState.loading)) {
               _loadAndPlayAudio(state.currentSegmentIndex);
             }
           }
@@ -414,6 +547,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   Future<void> _loadAndPlayAudio(int segmentIndex) async {
     if (_disposed || !mounted || state.session == null) return;
+    if (state.voice == null) {
+      _safeSetState(state.copyWith(error: 'Voice not set'));
+      return;
+    }
 
     final data = await _api.getAudio(
       state.session!.novelId,
@@ -422,7 +559,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     );
 
     if (_disposed || !mounted) return;
-    
+
     if (data == null) {
       _safeSetState(state.copyWith(waitingForAudio: true));
       return;
@@ -430,10 +567,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     await _playAudioData(data);
     if (_disposed || !mounted) return;
-    _safeSetState(state.copyWith(
-      waitingForAudio: false,
-      playbackState: PlaybackState.playing,
-    ));
+    _safeSetState(
+      state.copyWith(
+        waitingForAudio: false,
+        playbackState: PlaybackState.playing,
+      ),
+    );
   }
 
   Future<void> _playAudioData(Uint8List data) async {
@@ -444,14 +583,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   void _handlePlayerState(just_audio.PlayerState playerState) {
-    if (_disposed || !mounted) return;
+    if (_disposed || _isStopping || !mounted) return;
     if (playerState.processingState == just_audio.ProcessingState.completed) {
       _onAudioFinished();
     }
   }
 
   void _onAudioFinished() {
-    if (_disposed || !mounted) return;
+    if (_disposed || _isStopping || !mounted) return;
     debugPrint('_onAudioFinished called: playbackState=${state.playbackState}');
     if (state.playbackState != PlaybackState.playing) return;
 
@@ -460,87 +599,102 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       return;
     }
 
-     // 移动到下一段
     final nextIndex = state.currentSegmentIndex + 1;
-    
-    // 只有在没有手动滚动请求时才自动滚动
-    if (state.scrollToSegment == null) {
-      _safeSetState(state.copyWith(
-        currentSegmentIndex: nextIndex,
-        scrollToSegment: nextIndex,
-      ));
-    } else {
-      // 如果有手动滚动请求，只更新索引，不覆盖滚动目标
-      _safeSetState(state.copyWith(currentSegmentIndex: nextIndex));
-    }
 
-    if (_disposed || !mounted) return;
-    
     // 检查是否就绪
     if (state.isSegmentReady(nextIndex)) {
+      _safeSetState(state.copyWith(currentSegmentIndex: nextIndex));
       _loadAndPlayAudio(nextIndex);
     } else {
-      _safeSetState(state.copyWith(
-        playbackState: PlaybackState.loading,
-        waitingForAudio: true,
-      ));
+      _safeSetState(
+        state.copyWith(
+          currentSegmentIndex: nextIndex,
+          playbackState: PlaybackState.loading,
+          waitingForAudio: true,
+        ),
+      );
     }
 
     _submitPrefetchTasks();
   }
 
   void _handleWsEvent(WsEvent event) {
-    if (_disposed || !mounted) return;
-    
-    if (event is TaskStateChangedEvent) {
-      if (state.session == null) return;
-      if (event.sessionId != state.session!.sessionId) return;
+    // 多重检查，确保在任何异步间隙后都不会更新已销毁的状态
+    if (_disposed || _isStopping || !mounted || !hasListeners) return;
 
-      final tasks = Map<int, SegmentTask>.from(state.tasks);
-      final task = tasks[event.segmentIndex];
-      if (task != null) {
-        tasks[event.segmentIndex] = task.copyWith(
-          taskId: event.taskId,
-          state: TaskState.fromString(event.state),
-          durationMs: event.durationMs,
-          error: event.error,
-        );
-      } else {
-        tasks[event.segmentIndex] = SegmentTask(
-          sessionId: event.sessionId,
-          taskId: event.taskId,
-          segmentIndex: event.segmentIndex,
-          state: TaskState.fromString(event.state),
-          durationMs: event.durationMs,
-          error: event.error,
-          createdAt: DateTime.now(),
-        );
-      }
-      if (_disposed || !mounted) return;
-      _safeSetState(state.copyWith(tasks: tasks));
+    try {
+      if (event is TaskStateChangedEvent) {
+        if (state.session == null) return;
+        if (event.sessionId != state.session!.sessionId) return;
 
-      // 检查当前段落是否就绪
-      if (event.segmentIndex == state.currentSegmentIndex &&
-          event.state == 'ready' &&
-          (state.waitingForAudio || state.playbackState == PlaybackState.loading)) {
-        _loadAndPlayAudio(state.currentSegmentIndex);
+        // 检查任务是否属于当前 version
+        final task = state.tasks[event.segmentIndex];
+        if (task != null && task.sessionId != state.session!.sessionId) {
+          debugPrint('Ignoring task from old session: ${event.segmentIndex}');
+          return;
+        }
+
+        // 检查任务是否属于当前 version（防止旧 seek/start 的事件污染新状态）
+        if (task != null && task.version != state.version) {
+          debugPrint('Ignoring task from old version: ${event.segmentIndex}, task.version=${task.version}, state.version=${state.version}');
+          return;
+        }
+
+        final tasks = Map<int, SegmentTask>.from(state.tasks);
+        if (task != null) {
+          tasks[event.segmentIndex] = task.copyWith(
+            taskId: event.taskId,
+            state: TaskState.fromString(event.state),
+            durationMs: event.durationMs,
+            error: event.error,
+            version: state.version,
+          );
+        } else {
+          tasks[event.segmentIndex] = SegmentTask(
+            sessionId: event.sessionId,
+            taskId: event.taskId,
+            segmentIndex: event.segmentIndex,
+            state: TaskState.fromString(event.state),
+            durationMs: event.durationMs,
+            error: event.error,
+            createdAt: DateTime.now(),
+            version: state.version,
+          );
+        }
+
+        // 在更新状态前再次检查
+        if (_disposed || !mounted || !hasListeners) return;
+        _safeSetState(state.copyWith(tasks: tasks));
+
+        // 检查当前段落是否就绪
+        if (event.segmentIndex == state.currentSegmentIndex &&
+            event.state == 'ready' &&
+            (state.waitingForAudio ||
+                state.playbackState == PlaybackState.loading)) {
+          _loadAndPlayAudio(state.currentSegmentIndex);
+        }
+      } else if (event is SessionClosedEvent) {
+        if (_disposed || !mounted || !hasListeners) return;
+        if (state.session?.sessionId == event.sessionId) {
+          _safeSetState(
+            state.copyWith(
+              session: null,
+              playbackState: PlaybackState.stopped,
+              tasks: {},
+              error: 'Session closed: ${event.reason}',
+            ),
+          );
+        }
       }
-    } else if (event is SessionClosedEvent) {
-      if (_disposed || !mounted) return;
-      if (state.session?.sessionId == event.sessionId) {
-        _safeSetState(state.copyWith(
-          session: null,
-          playbackState: PlaybackState.stopped,
-          tasks: {},
-          error: 'Session closed: ${event.reason}',
-        ));
-      }
+    } catch (e) {
+      // 捕获所有错误，防止 WebSocket 事件导致应用崩溃
+      debugPrint('Error handling WebSocket event: $e');
     }
   }
 
   void _prefetchTasks() {
     if (_disposed || !mounted) return;
-    if (state.playbackState != PlaybackState.playing && 
+    if (state.playbackState != PlaybackState.playing &&
         state.playbackState != PlaybackState.loading) {
       return;
     }
@@ -553,9 +707,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     final now = DateTime.now();
     final tasks = Map<int, SegmentTask>.from(state.tasks);
     final originalLength = tasks.length;
-    tasks.removeWhere((_, task) =>
-        task.state == TaskState.pending && 
-        now.difference(task.createdAt) > const Duration(seconds: 30));
+    tasks.removeWhere(
+      (_, task) =>
+          task.state == TaskState.pending &&
+          now.difference(task.createdAt) > const Duration(seconds: 30),
+    );
     // 只有在有变化且未被销毁时才更新 state
     if (!_disposed && mounted && tasks.length != originalLength) {
       _safeSetState(state.copyWith(tasks: tasks));
@@ -563,14 +719,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 }
 
-/// 播放器 Provider (autoDispose: 离开页面时自动销毁，避免 defunct element 错误)
+/// 播放器 Provider
+/// 使用 autoDispose 自动管理生命周期
+/// 当没有监听器时（页面完全退出），provider 会自动 dispose
 final playerProvider = StateNotifierProvider.autoDispose<PlayerNotifier, PlayerState>((ref) {
   final notifier = PlayerNotifier(
     ref.watch(apiServiceProvider),
     ref.watch(webSocketServiceProvider),
   );
   ref.onDispose(() {
-    notifier.stopPlayback();
+    notifier.dispose();
   });
   return notifier;
 });

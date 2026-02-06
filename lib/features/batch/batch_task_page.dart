@@ -4,6 +4,7 @@ import '../../core/providers/batch_task_provider.dart';
 import '../../core/providers/novel_provider.dart';
 import '../../core/providers/voice_provider.dart';
 import '../../data/models/batch_task.dart';
+import '../home/home_page.dart';
 
 /// 批量任务管理页面
 class BatchTaskPage extends ConsumerStatefulWidget {
@@ -14,25 +15,43 @@ class BatchTaskPage extends ConsumerStatefulWidget {
 }
 
 class _BatchTaskPageState extends ConsumerState<BatchTaskPage> {
+  static const int _batchTabIndex = 2; // 任务 tab 的索引
+  bool _isPolling = false;
+
   @override
   void initState() {
     super.initState();
-    // 进入页面时开始轮询
+    debugPrint('BatchTaskPage.initState()');
+    // 首次构建后开始轮询
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(batchTaskListProvider.notifier).startPolling();
+      _updatePolling();
     });
   }
 
   @override
   void dispose() {
+    debugPrint('BatchTaskPage.dispose()');
+    // 页面完全销毁时停止轮询
+    ref.read(batchTaskListProvider.notifier).stopPolling();
     super.dispose();
   }
 
-  @override
-  void deactivate() {
-    // 离开页面时停止轮询
-    ref.read(batchTaskListProvider.notifier).stopPolling();
-    super.deactivate();
+  /// 根据当前是否可见更新轮询状态
+  void _updatePolling() {
+    final currentIndex = ref.read(homeNavIndexProvider);
+    final shouldBePolling = currentIndex == _batchTabIndex;
+
+    debugPrint('BatchTaskPage._updatePolling() - currentIndex=$currentIndex, shouldBePolling=$shouldBePolling, _isPolling=$_isPolling');
+
+    if (shouldBePolling && !_isPolling) {
+      debugPrint('BatchTaskPage - starting polling');
+      ref.read(batchTaskListProvider.notifier).startPolling();
+      _isPolling = true;
+    } else if (!shouldBePolling && _isPolling) {
+      debugPrint('BatchTaskPage - stopping polling');
+      ref.read(batchTaskListProvider.notifier).stopPolling();
+      _isPolling = false;
+    }
   }
 
   Future<void> _onRefresh() async {
@@ -42,7 +61,13 @@ class _BatchTaskPageState extends ConsumerState<BatchTaskPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(batchTaskListProvider);
+    final navIndex = ref.watch(homeNavIndexProvider);
     final colorScheme = Theme.of(context).colorScheme;
+
+    // 监听导航索引变化，控制轮询
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updatePolling();
+    });
 
     return Scaffold(
       appBar: AppBar(

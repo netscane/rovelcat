@@ -35,6 +35,7 @@ class SegmentTask {
   final int? durationMs;
   final String? error;
   final DateTime createdAt;
+  final int version;
 
   const SegmentTask({
     required this.sessionId,
@@ -44,6 +45,7 @@ class SegmentTask {
     this.durationMs,
     this.error,
     required this.createdAt,
+    this.version = 0,
   });
 
   SegmentTask copyWith({
@@ -54,6 +56,7 @@ class SegmentTask {
     int? durationMs,
     String? error,
     DateTime? createdAt,
+    int? version,
   }) {
     return SegmentTask(
       sessionId: sessionId ?? this.sessionId,
@@ -63,6 +66,7 @@ class SegmentTask {
       durationMs: durationMs ?? this.durationMs,
       error: error ?? this.error,
       createdAt: createdAt ?? this.createdAt,
+      version: version ?? this.version,
     );
   }
 }

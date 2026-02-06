@@ -236,18 +236,27 @@ class ApiService {
   }
 
   Future<Result<int>> seek(String sessionId, int segmentIndex) async {
-    final response = await _dio.post('/session/seek', data: {
-      'session_id': sessionId,
-      'segment_index': segmentIndex,
-    });
-    final apiResp = ApiResponse<int>.fromJson(
-      response.data,
-      (data) => (data as Map<String, dynamic>)['current_index'] as int,
-    );
-    if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+    debugPrint('ApiService.seek(): session_id=$sessionId, segment_index=$segmentIndex');
+    try {
+      final response = await _dio.post('/session/seek', data: {
+        'session_id': sessionId,
+        'segment_index': segmentIndex,
+      });
+      debugPrint('ApiService.seek() response: ${response.data}');
+      final apiResp = ApiResponse<int>.fromJson(
+        response.data,
+        (data) => (data as Map<String, dynamic>)['current_index'] as int,
+      );
+      if (!apiResp.isSuccess) {
+        debugPrint('ApiService.seek() failed: ${apiResp.error}');
+        return Result.failure(apiResp.error);
+      }
+      debugPrint('ApiService.seek() success: current_index=${apiResp.data}');
+      return Result.success(apiResp.data!);
+    } catch (e) {
+      debugPrint('ApiService.seek() exception: $e');
+      return Result.failure(e.toString());
     }
-    return Result.success(apiResp.data!);
   }
 
   Future<Result<void>> changeVoice(String sessionId, String voiceId) async {

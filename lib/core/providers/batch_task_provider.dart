@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/batch_task.dart';
 import '../../data/services/api_service.dart';
@@ -62,19 +63,24 @@ class BatchTaskListNotifier extends StateNotifier<BatchTaskListState> {
 
   /// 开始轮询
   void startPolling() {
+    debugPrint('BatchTaskListNotifier.startPolling() called');
     stopPolling();
     loadTasks();
     _pollingTimer = Timer.periodic(_pollInterval, (_) => _pollTasks());
+    debugPrint('BatchTaskListNotifier.startPolling() - timer started');
   }
 
   /// 停止轮询
   void stopPolling() {
+    debugPrint('BatchTaskListNotifier.stopPolling() called');
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    debugPrint('BatchTaskListNotifier.stopPolling() - timer cancelled');
   }
 
   /// 静默轮询更新
   Future<void> _pollTasks() async {
+    debugPrint('BatchTaskListNotifier._pollTasks() - polling server');
     final result = await _api.listBatchTasks();
     result.fold(
       (_) {}, // 轮询时忽略错误
@@ -167,7 +173,12 @@ class BatchTaskListNotifier extends StateNotifier<BatchTaskListState> {
 }
 
 /// 批量任务列表 Provider
+/// 使用 autoDispose 自动管理生命周期，当离开页面时停止轮询
 final batchTaskListProvider =
-    StateNotifierProvider<BatchTaskListNotifier, BatchTaskListState>((ref) {
-  return BatchTaskListNotifier(ref.watch(apiServiceProvider));
+    StateNotifierProvider.autoDispose<BatchTaskListNotifier, BatchTaskListState>((ref) {
+  final notifier = BatchTaskListNotifier(ref.watch(apiServiceProvider));
+  ref.onDispose(() {
+    notifier.stopPolling();
+  });
+  return notifier;
 });

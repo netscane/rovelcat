@@ -153,10 +153,10 @@ class _ProgressSlider extends StatelessWidget {
         overlayColor: colorScheme.primary.withValues(alpha: 0.2),
       ),
       child: Slider(
-        value: totalSegments > 0 ? currentIndex.toDouble() : 0,
+        value: totalSegments > 0 ? (currentIndex + 1).toDouble() : 0,
         min: 0,
-        max: totalSegments > 0 ? (totalSegments - 1).toDouble() : 1,
-        onChanged: (value) => onSeek(value.round()),
+        max: totalSegments > 0 ? totalSegments.toDouble() : 1,
+        onChanged: (value) => onSeek(value.floor() - 1),
       ),
     );
   }
