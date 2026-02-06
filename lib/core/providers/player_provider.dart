@@ -10,6 +10,7 @@ import '../../data/models/play_session.dart';
 import '../../data/models/segment_task.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/websocket_service.dart';
+import 'settings_provider.dart';
 
 /// 播放状态枚举
 enum PlaybackState { stopped, loading, playing, paused }
@@ -101,6 +102,7 @@ class PlayerState {
 class PlayerNotifier extends StateNotifier<PlayerState> {
   final ApiService _api;
   final WebSocketService _wsService;
+  final Ref _ref;
   final just_audio.AudioPlayer _audioPlayer = just_audio.AudioPlayer();
 
   StreamSubscription<WsEvent>? _wsSub;
@@ -112,10 +114,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   int _version = 0;
   String? _sessionId;
 
-  static const int _prefetchAhead = 3;
+  // 批量预加载并发控制
+  static const int _maxConcurrentPrefetch = 3;
   static const int _pageSize = 30;
 
-  PlayerNotifier(this._api, this._wsService) : super(const PlayerState()) {
+  PlayerNotifier(this._api, this._wsService, this._ref) : super(const PlayerState()) {
     _playerSub = _audioPlayer.playerStateStream.listen(_handlePlayerState);
     _prefetchTimer = Timer.periodic(
       const Duration(seconds: 1),
@@ -483,8 +486,39 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   void _submitPrefetchTasks() {
     if (_disposed || state.session == null) return;
 
+    // 从设置获取预加载数量
+    final prefetchCount = _ref.read(prefetchCountProvider);
+    
+    // 计算当前正在进行的任务数（pending 或 inferring 状态）
+    int inProgressCount = 0;
+    for (final task in state.tasks.values) {
+      if (task.state == TaskState.pending || task.state == TaskState.inferring) {
+        inProgressCount++;
+      }
+    }
+    
+    // 如果有任务正在进行中，不提交新任务
+    if (inProgressCount > 0) return;
+    
+    // 计算已经加载完成的数量（ready 状态，且在当前段落之后）
+    int readyCount = 0;
+    for (int i = state.currentSegmentIndex; i < state.currentSegmentIndex + prefetchCount + 1 && i < state.totalSegments; i++) {
+      final task = state.tasks[i];
+      if (task != null && task.state == TaskState.ready) {
+        readyCount++;
+      }
+    }
+    
+    // 计算还需要加载的数量
+    final targetCount = (prefetchCount + 1).clamp(0, state.totalSegments - state.currentSegmentIndex);
+    final needToLoad = targetCount - readyCount;
+    
+    // 如果需要加载的数量 > batchSize，则加载下一批
+    if (needToLoad <= _maxConcurrentPrefetch) return;
+    
+    // 收集需要加载的索引
     final indices = <int>[];
-    final end = (state.currentSegmentIndex + _prefetchAhead + 1).clamp(
+    final end = (state.currentSegmentIndex + prefetchCount + 1).clamp(
       0,
       state.totalSegments,
     );
@@ -501,9 +535,23 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     if (indices.isEmpty) return;
 
+    // 批量提交，每批最多 _maxConcurrentPrefetch 个
+    _submitPrefetchBatch(indices);
+  }
+
+  /// 批量提交预加载任务，限制并发数
+  void _submitPrefetchBatch(List<int> indices) {
+    if (_disposed || !mounted || state.session == null) return;
+    if (indices.isEmpty) return;
+
+    // 取出可提交的索引（最多 batchSize 个）
+    final toSubmit = indices.take(_maxConcurrentPrefetch).toList();
+    if (toSubmit.isEmpty) return;
+
+    // 更新任务状态为 pending
     final tasks = Map<int, SegmentTask>.from(state.tasks);
     final now = DateTime.now();
-    for (final idx in indices) {
+    for (final idx in toSubmit) {
       tasks[idx] = SegmentTask(
         sessionId: state.session!.sessionId,
         segmentIndex: idx,
@@ -514,7 +562,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
     _safeSetState(state.copyWith(tasks: tasks));
 
-    _api.submitInfer(state.session!.sessionId, indices).then((result) {
+    // 提交到服务器
+    _api.submitInfer(state.session!.sessionId, toSubmit).then((result) {
       if (_disposed || !mounted) return;
       result.fold(
         (error) {
@@ -726,6 +775,7 @@ final playerProvider = StateNotifierProvider.autoDispose<PlayerNotifier, PlayerS
   final notifier = PlayerNotifier(
     ref.watch(apiServiceProvider),
     ref.watch(webSocketServiceProvider),
+    ref,
   );
   ref.onDispose(() {
     notifier.dispose();

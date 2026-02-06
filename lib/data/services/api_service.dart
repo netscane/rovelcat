@@ -186,11 +186,13 @@ class ApiService {
     String name,
     String? description,
     Uint8List fileBytes,
-    String fileName,
-  ) async {
+    String fileName, {
+    String? refText,
+  }) async {
     final formData = FormData.fromMap({
       'name': name,
       if (description != null) 'description': description,
+      if (refText != null) 'ref_text': refText,
       'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
     });
     final response = await _dio.post('/voice/upload', data: formData);

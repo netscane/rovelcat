@@ -18,6 +18,7 @@ class _UploadVoiceDialogState extends ConsumerState<UploadVoiceDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descController = TextEditingController();
+  final _refTextController = TextEditingController();
   
   Uint8List? _fileBytes;
   String? _fileName;
@@ -28,6 +29,7 @@ class _UploadVoiceDialogState extends ConsumerState<UploadVoiceDialog> {
   void dispose() {
     _nameController.dispose();
     _descController.dispose();
+    _refTextController.dispose();
     super.dispose();
   }
 
@@ -69,6 +71,7 @@ class _UploadVoiceDialogState extends ConsumerState<UploadVoiceDialog> {
       _descController.text.trim().isEmpty ? null : _descController.text.trim(),
       _fileBytes!,
       _fileName!,
+      refText: _refTextController.text.trim().isEmpty ? null : _refTextController.text.trim(),
     );
 
     result.fold(
@@ -193,6 +196,18 @@ class _UploadVoiceDialogState extends ConsumerState<UploadVoiceDialog> {
                   ),
                   enabled: !_isUploading,
                   maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+
+                // 参考文本输入（可选）
+                TextFormField(
+                  controller: _refTextController,
+                  decoration: const InputDecoration(
+                    labelText: '参考文本（可选）',
+                    hintText: '音频对应的文本内容，用于语音克隆',
+                  ),
+                  enabled: !_isUploading,
+                  maxLines: 3,
                 ),
                 const SizedBox(height: 16),
 

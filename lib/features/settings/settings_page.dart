@@ -37,6 +37,14 @@ class SettingsPage extends ConsumerWidget {
           ),
           const Divider(height: 1, indent: 72),
           _SettingsTile(
+            icon: Icons.download_for_offline,
+            iconColor: colorScheme.secondary,
+            title: '预加载数量',
+            subtitle: '${settingsState.prefetchCount} 段',
+            onTap: () => _showPrefetchCountDialog(context, ref),
+          ),
+          const Divider(height: 1, indent: 72),
+          _SettingsTile(
             icon: Icons.history,
             iconColor: colorScheme.tertiary,
             title: '播放历史',
@@ -194,6 +202,54 @@ class SettingsPage extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => const HistoryListDialog(),
+    );
+  }
+
+  void _showPrefetchCountDialog(BuildContext context, WidgetRef ref) {
+    final currentCount = ref.read(settingsProvider).prefetchCount;
+    final options = [3, 5, 8, 10, 12, 15, 20];
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '预加载数量',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '设置播放时提前加载的段落数量（并发上限为 3）',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          ...options.map((count) => _PrefetchCountOption(
+                count: count,
+                isSelected: currentCount == count,
+                onTap: () {
+                  ref.read(settingsProvider.notifier).setPrefetchCount(count);
+                  Navigator.of(context).pop();
+                },
+              )),
+          const SizedBox(height: 24),
+        ],
+      ),
     );
   }
 
@@ -485,6 +541,46 @@ class _ThemeModeOption extends StatelessWidget {
         ),
       ),
       title: Text(title),
+      trailing: isSelected
+          ? Icon(Icons.check_circle, color: colorScheme.primary)
+          : null,
+      selected: isSelected,
+      onTap: onTap,
+    );
+  }
+}
+
+class _PrefetchCountOption extends StatelessWidget {
+  final int count;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _PrefetchCountOption({
+    required this.count,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: isSelected
+            ? colorScheme.primaryContainer
+            : colorScheme.surfaceContainerHighest,
+        child: Text(
+          '$count',
+          style: TextStyle(
+            color: isSelected
+                ? colorScheme.onPrimaryContainer
+                : colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      title: Text('$count 段'),
       trailing: isSelected
           ? Icon(Icons.check_circle, color: colorScheme.primary)
           : null,

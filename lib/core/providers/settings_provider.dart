@@ -5,6 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 const String _themeModeKey = 'theme_mode';
 const String _serverHostKey = 'server_host';
 const String _serverPortKey = 'server_port';
+const String _prefetchCountKey = 'prefetch_count';
+
+/// 默认预加载数量
+const int defaultPrefetchCount = 12;
 
 /// 设置状态
 class SettingsState {
@@ -13,6 +17,7 @@ class SettingsState {
   final int? serverPort;
   final bool isLoading;
   final bool isInitialized;
+  final int prefetchCount;
 
   const SettingsState({
     this.themeMode = ThemeMode.system,
@@ -20,6 +25,7 @@ class SettingsState {
     this.serverPort,
     this.isLoading = false,
     this.isInitialized = false,
+    this.prefetchCount = defaultPrefetchCount,
   });
 
   bool get isServerConfigured => serverHost != null && serverHost!.isNotEmpty;
@@ -33,6 +39,7 @@ class SettingsState {
     int? serverPort,
     bool? isLoading,
     bool? isInitialized,
+    int? prefetchCount,
   }) {
     return SettingsState(
       themeMode: themeMode ?? this.themeMode,
@@ -40,6 +47,7 @@ class SettingsState {
       serverPort: serverPort ?? this.serverPort,
       isLoading: isLoading ?? this.isLoading,
       isInitialized: isInitialized ?? this.isInitialized,
+      prefetchCount: prefetchCount ?? this.prefetchCount,
     );
   }
 }
@@ -58,6 +66,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     final themeMode = ThemeMode.values[themeModeIndex];
     final serverHost = prefs.getString(_serverHostKey);
     final serverPort = prefs.getInt(_serverPortKey);
+    final prefetchCount = prefs.getInt(_prefetchCountKey) ?? defaultPrefetchCount;
     
     state = state.copyWith(
       themeMode: themeMode,
@@ -65,6 +74,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       serverPort: serverPort,
       isLoading: false,
       isInitialized: true,
+      prefetchCount: prefetchCount,
     );
   }
 
@@ -85,10 +95,19 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     state = SettingsState(
       themeMode: state.themeMode,
       isInitialized: true,
+      prefetchCount: state.prefetchCount,
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_serverHostKey);
     await prefs.remove(_serverPortKey);
+  }
+
+  Future<void> setPrefetchCount(int count) async {
+    // 限制范围 1-20
+    final validCount = count.clamp(1, 20);
+    state = state.copyWith(prefetchCount: validCount);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefetchCountKey, validCount);
   }
 }
 
@@ -110,4 +129,9 @@ final isServerConfiguredProvider = Provider<bool>((ref) {
 /// 设置是否已初始化
 final isSettingsInitializedProvider = Provider<bool>((ref) {
   return ref.watch(settingsProvider).isInitialized;
+});
+
+/// 预加载数量 Provider（便捷访问）
+final prefetchCountProvider = Provider<int>((ref) {
+  return ref.watch(settingsProvider).prefetchCount;
 });
