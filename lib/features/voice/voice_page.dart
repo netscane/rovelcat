@@ -4,7 +4,7 @@ import '../../core/providers/voice_provider.dart';
 import '../../data/models/voice.dart';
 import '../../data/services/websocket_service.dart';
 import 'widgets/voice_card.dart';
-import 'widgets/upload_voice_dialog.dart';
+import 'upload_voice_page.dart';
 
 /// 音色管理页面
 class VoicePage extends ConsumerStatefulWidget {
@@ -37,9 +37,10 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   }
 
   void _showUploadDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => const UploadVoiceDialog(),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const UploadVoicePage(),
+      ),
     );
   }
 
