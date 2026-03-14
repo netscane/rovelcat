@@ -5,6 +5,9 @@ class Voice {
   final String? description;
   final String createdAt;
   final String? coverUrl;
+  final String? gender;
+  final String? ageGroup;
+  final List<String> tags;
 
   const Voice({
     required this.id,
@@ -12,6 +15,9 @@ class Voice {
     this.description,
     this.createdAt = '',
     this.coverUrl,
+    this.gender,
+    this.ageGroup,
+    this.tags = const [],
   });
 
   factory Voice.fromJson(Map<String, dynamic> json) {
@@ -21,6 +27,9 @@ class Voice {
       description: json['description'] as String?,
       createdAt: json['created_at'] as String? ?? '',
       coverUrl: json['cover_url'] as String?,
+      gender: json['gender'] as String?,
+      ageGroup: json['age_group'] as String?,
+      tags: (json['tags'] as List?)?.map((e) => e as String).toList() ?? [],
     );
   }
 
@@ -31,6 +40,9 @@ class Voice {
       'description': description,
       'created_at': createdAt,
       'cover_url': coverUrl,
+      if (gender != null) 'gender': gender,
+      if (ageGroup != null) 'age_group': ageGroup,
+      if (tags.isNotEmpty) 'tags': tags,
     };
   }
 
@@ -40,6 +52,9 @@ class Voice {
     String? description,
     String? createdAt,
     String? coverUrl,
+    String? gender,
+    String? ageGroup,
+    List<String>? tags,
   }) {
     return Voice(
       id: id ?? this.id,
@@ -47,6 +62,9 @@ class Voice {
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
       coverUrl: coverUrl ?? this.coverUrl,
+      gender: gender ?? this.gender,
+      ageGroup: ageGroup ?? this.ageGroup,
+      tags: tags ?? this.tags,
     );
   }
 
@@ -54,5 +72,42 @@ class Voice {
   String get formattedDate {
     if (createdAt.isEmpty) return '';
     return createdAt.length >= 10 ? createdAt.substring(0, 10) : createdAt;
+  }
+
+  /// 性别显示标签
+  String get genderLabel {
+    switch (gender) {
+      case 'male':
+        return '男';
+      case 'female':
+        return '女';
+      default:
+        return '';
+    }
+  }
+
+  /// 年龄段显示标签
+  String get ageGroupLabel {
+    switch (ageGroup) {
+      case 'child':
+        return '儿童';
+      case 'young':
+        return '青年';
+      case 'middle':
+        return '中年';
+      case 'elder':
+        return '老年';
+      default:
+        return '';
+    }
+  }
+
+  /// 获取所有显示标签（包含性别、年龄段和自定义标签）
+  List<String> get allDisplayTags {
+    final result = <String>[];
+    if (genderLabel.isNotEmpty) result.add(genderLabel);
+    if (ageGroupLabel.isNotEmpty) result.add(ageGroupLabel);
+    result.addAll(tags);
+    return result;
   }
 }

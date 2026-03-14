@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/novel_provider.dart';
-import '../../core/providers/voice_provider.dart';
-import '../../core/providers/history_provider.dart';
 import '../../data/models/novel.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/websocket_service.dart';
@@ -10,7 +8,7 @@ import 'widgets/novel_grid_view.dart';
 import 'widgets/novel_list_view.dart';
 import 'widgets/upload_novel_dialog.dart';
 import 'widgets/batch_preheat_dialog.dart';
-import '../player/player_page.dart';
+import 'novel_detail_page.dart';
 
 /// 小说页面
 class NovelPage extends ConsumerStatefulWidget {
@@ -62,23 +60,9 @@ class _NovelPageState extends ConsumerState<NovelPage> {
       return;
     }
 
-    final voiceState = ref.read(voiceListProvider);
-    if (voiceState.voices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先添加音色')),
-      );
-      return;
-    }
-
-    // 检查是否有播放历史
-    final history = ref.read(historyProvider.notifier).getLastPosition(novel.id);
-    
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => PlayerPage(
-          novel: novel,
-          startIndex: history?.segmentIndex ?? 0,
-        ),
+        builder: (context) => NovelDetailPage(novel: novel),
       ),
     );
   }

@@ -8,6 +8,7 @@ import '../models/segment.dart';
 import '../models/play_session.dart';
 import '../models/segment_task.dart';
 import '../models/batch_task.dart';
+import '../models/novel_brief.dart';
 
 /// 结果类型：Either 的简化实现
 class Result<T> {
@@ -151,13 +152,13 @@ class ApiService {
   }) => getUtterances(novelId, start: start, limit: limit);
 
   /// 获取小说概要（含 speakers、解析状态等）
-  Future<Result<Map<String, dynamic>>> getNovelBrief(String novelId) async {
+  Future<Result<NovelBrief>> getNovelBrief(String novelId) async {
     final response = await _dio.post('/novel/brief', data: {
       'novel_id': novelId,
     });
-    final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
+    final apiResp = ApiResponse<NovelBrief>.fromJson(
       response.data,
-      (data) => data as Map<String, dynamic>,
+      (data) => NovelBrief.fromJson(data as Map<String, dynamic>),
     );
     if (!apiResp.isSuccess) {
       return Result.failure(_errorMsg(apiResp));
@@ -228,11 +229,17 @@ class ApiService {
     Uint8List fileBytes,
     String fileName, {
     String? refText,
+    String? gender,
+    String? ageGroup,
+    List<String>? tags,
   }) async {
     final formData = FormData.fromMap({
       'name': name,
       if (description != null) 'description': description,
       if (refText != null) 'ref_text': refText,
+      if (gender != null && gender != 'unknown') 'gender': gender,
+      if (ageGroup != null && ageGroup != 'unknown') 'age_group': ageGroup,
+      if (tags != null && tags.isNotEmpty) 'tags': tags.join(','),
       'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
     });
     final response = await _dio.post('/voice/upload', data: formData);
