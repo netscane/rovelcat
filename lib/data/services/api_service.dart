@@ -26,14 +26,15 @@ class Result<T> {
 }
 
 /// API 响应封装
+/// 新格式: { "success": bool, "data": T?, "error": String? }
 class ApiResponse<T> {
-  final int errno;
-  final String error;
+  final bool success;
+  final String? error;
   final T? data;
 
   ApiResponse({
-    required this.errno,
-    required this.error,
+    required this.success,
+    this.error,
     this.data,
   });
 
@@ -42,15 +43,15 @@ class ApiResponse<T> {
     T Function(dynamic)? fromData,
   ) {
     return ApiResponse(
-      errno: json['errno'] as int,
-      error: json['error'] as String,
+      success: json['success'] as bool? ?? false,
+      error: json['error'] as String?,
       data: json['data'] != null && fromData != null
           ? fromData(json['data'])
           : null,
     );
   }
 
-  bool get isSuccess => errno == 0;
+  bool get isSuccess => success;
 }
 
 /// API 服务
@@ -77,6 +78,9 @@ class ApiService {
 
   String get baseUrl => _baseUrl;
 
+  /// 从 ApiResponse 提取错误信息
+  String _errorMsg(ApiResponse resp) => resp.error ?? 'Unknown error';
+
   /// 测试服务器连接
   Future<Result<String>> testConnection() async {
     try {
@@ -101,7 +105,7 @@ class ApiService {
       (data) => (data as List).map((e) => Novel.fromJson(e)).toList(),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data ?? []);
   }
@@ -113,17 +117,18 @@ class ApiService {
       (data) => Novel.fromJson(data),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
 
-  Future<Result<SegmentsResponse>> getSegments(
+  /// 获取小说段落（utterances）
+  Future<Result<SegmentsResponse>> getUtterances(
     String novelId, {
     int? start,
     int? limit,
   }) async {
-    final response = await _dio.post('/novel/segments', data: {
+    final response = await _dio.post('/novel/utterances', data: {
       'novel_id': novelId,
       if (start != null) 'start': start,
       if (limit != null) 'limit': limit,
@@ -133,7 +138,29 @@ class ApiService {
       (data) => SegmentsResponse.fromJson(data as Map<String, dynamic>),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(apiResp.data!);
+  }
+
+  /// 获取小说段落（兼容旧接口名）
+  Future<Result<SegmentsResponse>> getSegments(
+    String novelId, {
+    int? start,
+    int? limit,
+  }) => getUtterances(novelId, start: start, limit: limit);
+
+  /// 获取小说概要（含 speakers、解析状态等）
+  Future<Result<Map<String, dynamic>>> getNovelBrief(String novelId) async {
+    final response = await _dio.post('/novel/brief', data: {
+      'novel_id': novelId,
+    });
+    final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
+      response.data,
+      (data) => data as Map<String, dynamic>,
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
@@ -153,7 +180,7 @@ class ApiService {
       (data) => Novel.fromJson(data),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
@@ -162,7 +189,7 @@ class ApiService {
     final response = await _dio.post('/novel/delete', data: {'id': id});
     final apiResp = ApiResponse.fromJson(response.data, null);
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(null);
   }
@@ -177,9 +204,22 @@ class ApiService {
       (data) => (data as List).map((e) => Voice.fromJson(e)).toList(),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data ?? []);
+  }
+
+  /// 获取单个音色详情
+  Future<Result<Voice>> getVoice(String id) async {
+    final response = await _dio.post('/voice/get', data: {'id': id});
+    final apiResp = ApiResponse<Voice>.fromJson(
+      response.data,
+      (data) => Voice.fromJson(data),
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(apiResp.data!);
   }
 
   Future<Result<Voice>> uploadVoice(
@@ -201,7 +241,7 @@ class ApiService {
       (data) => Voice.fromJson(data),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
@@ -210,9 +250,36 @@ class ApiService {
     final response = await _dio.post('/voice/delete', data: {'id': id});
     final apiResp = ApiResponse.fromJson(response.data, null);
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(null);
+  }
+
+  /// 获取音色标签选项
+  Future<Result<Map<String, dynamic>>> getVoiceTagOptions() async {
+    final response = await _dio.get('/voice/tags/options');
+    final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
+      response.data,
+      (data) => data as Map<String, dynamic>,
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(apiResp.data!);
+  }
+
+  /// 下载音色参考音频
+  Future<Uint8List?> getVoiceAudio(String voiceId) async {
+    try {
+      final response = await _dio.get(
+        '/voice/audio/$voiceId',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return response.data as Uint8List;
+    } catch (e) {
+      debugPrint('getVoiceAudio error: $e');
+      return null;
+    }
   }
 
   // ========== Session APIs ==========
@@ -232,7 +299,7 @@ class ApiService {
       (data) => PlaySession.fromJson(data),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
@@ -251,7 +318,7 @@ class ApiService {
       );
       if (!apiResp.isSuccess) {
         debugPrint('ApiService.seek() failed: ${apiResp.error}');
-        return Result.failure(apiResp.error);
+        return Result.failure(_errorMsg(apiResp));
       }
       debugPrint('ApiService.seek() success: current_index=${apiResp.data}');
       return Result.success(apiResp.data!);
@@ -268,7 +335,7 @@ class ApiService {
     });
     final apiResp = ApiResponse.fromJson(response.data, null);
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(null);
   }
@@ -279,47 +346,73 @@ class ApiService {
     });
     final apiResp = ApiResponse.fromJson(response.data, null);
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(null);
   }
 
   // ========== Inference APIs ==========
 
+  /// 提交即时推理任务
+  /// 新接口: {texts: [...], voice_id: "..."}
   Future<Result<List<TaskInfo>>> submitInfer(
-    String sessionId,
-    List<int> segmentIndices,
+    List<String> texts,
+    String voiceId,
   ) async {
     final response = await _dio.post('/infer/submit', data: {
-      'session_id': sessionId,
-      'segment_indices': segmentIndices,
+      'texts': texts,
+      'voice_id': voiceId,
     });
     final apiResp = ApiResponse<List<TaskInfo>>.fromJson(
       response.data,
-      (data) => ((data as Map<String, dynamic>)['tasks'] as List)
-          .map((e) => TaskInfo.fromJson(e))
-          .toList(),
+      (data) {
+        if (data is List) {
+          return data.map((e) => TaskInfo.fromJson(e)).toList();
+        }
+        final map = data as Map<String, dynamic>;
+        if (map.containsKey('tasks')) {
+          return (map['tasks'] as List).map((e) => TaskInfo.fromJson(e)).toList();
+        }
+        return <TaskInfo>[];
+      },
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(apiResp.data ?? []);
+  }
+
+  /// 查询推理任务状态
+  Future<Result<List<TaskInfo>>> getInferStatus(List<String> taskIds) async {
+    final response = await _dio.post('/infer/status', data: {
+      'task_ids': taskIds,
+    });
+    final apiResp = ApiResponse<List<TaskInfo>>.fromJson(
+      response.data,
+      (data) {
+        if (data is List) {
+          return data.map((e) => TaskInfo.fromJson(e)).toList();
+        }
+        final map = data as Map<String, dynamic>;
+        if (map.containsKey('tasks')) {
+          return (map['tasks'] as List).map((e) => TaskInfo.fromJson(e)).toList();
+        }
+        return <TaskInfo>[];
+      },
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data ?? []);
   }
 
   // ========== Audio API ==========
 
-  Future<Uint8List?> getAudio(
-    String novelId,
-    int segmentIndex,
-    String voiceId,
-  ) async {
+  /// 通过 cache key 获取音频
+  Future<Uint8List?> getAudio(Map<String, dynamic> params) async {
     final response = await _dio.post(
       '/audio',
-      data: {
-        'novel_id': novelId,
-        'segment_index': segmentIndex,
-        'voice_id': voiceId,
-      },
+      data: params,
       options: Options(responseType: ResponseType.bytes),
     );
 
@@ -330,6 +423,149 @@ class ApiService {
     }
 
     return response.data as Uint8List;
+  }
+
+  /// 便捷方法：通过 novel_id + segment_index + voice_id 获取音频
+  Future<Uint8List?> getSegmentAudio(
+    String novelId,
+    int segmentIndex,
+    String voiceId,
+  ) async {
+    return getAudio({
+      'novel_id': novelId,
+      'segment_index': segmentIndex,
+      'voice_id': voiceId,
+    });
+  }
+
+  // ========== Character APIs ==========
+
+  /// 获取小说角色列表
+  Future<Result<List<Map<String, dynamic>>>> listCharacters(String novelId) async {
+    final response = await _dio.post('/character/list', data: {
+      'novel_id': novelId,
+    });
+    final apiResp = ApiResponse<List<Map<String, dynamic>>>.fromJson(
+      response.data,
+      (data) => (data as List).map((e) => e as Map<String, dynamic>).toList(),
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(apiResp.data ?? []);
+  }
+
+  /// 获取单个角色详情
+  Future<Result<Map<String, dynamic>>> getCharacter(String characterId) async {
+    final response = await _dio.post('/character/get', data: {
+      'character_id': characterId,
+    });
+    final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
+      response.data,
+      (data) => data as Map<String, dynamic>,
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(apiResp.data!);
+  }
+
+  /// 合并角色
+  Future<Result<void>> mergeCharacters(Map<String, dynamic> params) async {
+    final response = await _dio.post('/character/merge', data: params);
+    final apiResp = ApiResponse.fromJson(response.data, null);
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(null);
+  }
+
+  /// 按角色 ID 绑定音色
+  Future<Result<void>> assignVoiceToCharacter(String characterId, String voiceId) async {
+    final response = await _dio.post('/character/assign-voice', data: {
+      'character_id': characterId,
+      'voice_id': voiceId,
+    });
+    final apiResp = ApiResponse.fromJson(response.data, null);
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(null);
+  }
+
+  /// 按 speaker 名称绑定音色
+  Future<Result<void>> assignSpeakerVoice(
+    String novelId,
+    String speakerName,
+    String voiceId,
+  ) async {
+    final response = await _dio.post('/character/assign-speaker-voice', data: {
+      'novel_id': novelId,
+      'speaker_name': speakerName,
+      'voice_id': voiceId,
+    });
+    final apiResp = ApiResponse.fromJson(response.data, null);
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(null);
+  }
+
+  /// 更新角色重要性
+  Future<Result<void>> updateCharacterImportance(Map<String, dynamic> params) async {
+    final response = await _dio.post('/character/update-importance', data: params);
+    final apiResp = ApiResponse.fromJson(response.data, null);
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(null);
+  }
+
+  // ========== Worker APIs ==========
+
+  /// 启动解析 worker
+  Future<Result<void>> startWorker(Map<String, dynamic> params) async {
+    final response = await _dio.post('/worker/start', data: params);
+    final apiResp = ApiResponse.fromJson(response.data, null);
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(null);
+  }
+
+  /// 暂停 worker
+  Future<Result<void>> pauseWorker(Map<String, dynamic> params) async {
+    final response = await _dio.post('/worker/pause', data: params);
+    final apiResp = ApiResponse.fromJson(response.data, null);
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(null);
+  }
+
+  /// 恢复 worker
+  Future<Result<void>> resumeWorker(Map<String, dynamic> params) async {
+    final response = await _dio.post('/worker/resume', data: params);
+    final apiResp = ApiResponse.fromJson(response.data, null);
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(null);
+  }
+
+  /// 获取 worker 状态
+  Future<Result<Map<String, dynamic>>> getWorkerStatus(String novelId) async {
+    final response = await _dio.post('/worker/status', data: {
+      'novel_id': novelId,
+    });
+    final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
+      response.data,
+      (data) => data as Map<String, dynamic>,
+    );
+    if (!apiResp.isSuccess) {
+      return Result.failure(_errorMsg(apiResp));
+    }
+    return Result.success(apiResp.data!);
   }
 
   // ========== Batch Task APIs ==========
@@ -352,7 +588,7 @@ class ApiService {
       (data) => BatchTask.fromJson(data as Map<String, dynamic>),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
@@ -366,7 +602,7 @@ class ApiService {
           (data as List).map((e) => BatchTask.fromJson(e as Map<String, dynamic>)).toList(),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data ?? []);
   }
@@ -379,7 +615,7 @@ class ApiService {
       (data) => BatchTask.fromJson(data as Map<String, dynamic>),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
@@ -392,7 +628,7 @@ class ApiService {
       (data) => BatchTask.fromJson(data as Map<String, dynamic>),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
@@ -405,7 +641,7 @@ class ApiService {
       (data) => BatchTask.fromJson(data as Map<String, dynamic>),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
@@ -418,7 +654,7 @@ class ApiService {
       (data) => BatchTask.fromJson(data as Map<String, dynamic>),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }
@@ -431,7 +667,7 @@ class ApiService {
       (data) => BatchTask.fromJson(data as Map<String, dynamic>),
     );
     if (!apiResp.isSuccess) {
-      return Result.failure(apiResp.error);
+      return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
   }

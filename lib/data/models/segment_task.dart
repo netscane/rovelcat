@@ -76,18 +76,27 @@ class TaskInfo {
   final String taskId;
   final int segmentIndex;
   final String state;
+  final String? cacheKey;
+  final int? durationMs;
+  final String? error;
 
   const TaskInfo({
     required this.taskId,
-    required this.segmentIndex,
+    this.segmentIndex = -1,
     required this.state,
+    this.cacheKey,
+    this.durationMs,
+    this.error,
   });
 
   factory TaskInfo.fromJson(Map<String, dynamic> json) {
     return TaskInfo(
-      taskId: json['task_id'] as String,
-      segmentIndex: json['segment_index'] as int,
-      state: json['state'] as String,
+      taskId: json['task_id'] as String? ?? json['id'] as String? ?? '',
+      segmentIndex: json['segment_index'] as int? ?? json['index'] as int? ?? -1,
+      state: json['state'] as String? ?? json['status'] as String? ?? 'pending',
+      cacheKey: json['cache_key'] as String?,
+      durationMs: json['duration_ms'] as int?,
+      error: json['error'] as String?,
     );
   }
 }
