@@ -27,7 +27,9 @@ class Result<T> {
 }
 
 /// API 响应封装
-/// 新格式: { "success": bool, "data": T?, "error": String? }
+/// 兼容两种服务端格式:
+///   旧格式: { "errno": 0, "error": "", "data": T? }
+///   新格式: { "success": bool, "data": T?, "error": String? }
 class ApiResponse<T> {
   final bool success;
   final String? error;
@@ -43,8 +45,18 @@ class ApiResponse<T> {
     Map<String, dynamic> json,
     T Function(dynamic)? fromData,
   ) {
+    // 兼容 errno 和 success 两种协议
+    final bool isOk;
+    if (json.containsKey('errno')) {
+      // 旧格式: errno == 0 表示成功
+      isOk = (json['errno'] as int?) == 0;
+    } else {
+      // 新格式: success 布尔值
+      isOk = json['success'] as bool? ?? false;
+    }
+
     return ApiResponse(
-      success: json['success'] as bool? ?? false,
+      success: isOk,
       error: json['error'] as String?,
       data: json['data'] != null && fromData != null
           ? fromData(json['data'])

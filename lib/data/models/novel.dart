@@ -52,7 +52,9 @@ class Novel {
     return Novel(
       id: json['id'] as String,
       title: json['title'] as String,
-      totalSegments: json['total_segments'] as int? ?? 0,
+      totalSegments: json['total_utterances'] as int?
+          ?? json['total_segments'] as int?
+          ?? 0,
       status: NovelStatus.fromString(json['status'] as String? ?? 'ready'),
       createdAt: json['created_at'] as String? ?? '',
       isTemporary: json['is_temporary'] as bool? ?? false,
