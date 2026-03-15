@@ -88,12 +88,32 @@ class AssignmentSummary {
   int get totalCount => assignedCount + unassignedCount;
 }
 
+/// 能力字段（来自 /novel/brief API 的 capabilities）
+class BriefCapabilities {
+  final bool canAssignVoice;
+  final String? assignBlockReason;
+
+  const BriefCapabilities({
+    this.canAssignVoice = false,
+    this.assignBlockReason,
+  });
+
+  factory BriefCapabilities.fromJson(Map<String, dynamic> json) {
+    return BriefCapabilities(
+      canAssignVoice: json['can_assign_voice'] as bool? ?? false,
+      assignBlockReason: json['assign_block_reason'] as String?,
+    );
+  }
+}
+
 /// 小说概要信息（来自 /novel/brief API）
 class NovelBrief {
   final String id;
   final String title;
   final String status;
   final int totalUtterances;
+  final String parsePhase;
+  final BriefCapabilities capabilities;
   final WorkerStatus worker;
   final AssignmentSummary summary;
   final List<SpeakerInfo> speakers;
@@ -103,6 +123,8 @@ class NovelBrief {
     required this.title,
     this.status = '',
     this.totalUtterances = 0,
+    this.parsePhase = '',
+    this.capabilities = const BriefCapabilities(),
     this.worker = const WorkerStatus(),
     this.summary = const AssignmentSummary(),
     this.speakers = const [],
@@ -114,6 +136,11 @@ class NovelBrief {
       title: json['title'] as String? ?? '',
       status: json['status'] as String? ?? '',
       totalUtterances: json['total_utterances'] as int? ?? 0,
+      parsePhase: json['parse_phase'] as String? ?? '',
+      capabilities: json['capabilities'] != null
+          ? BriefCapabilities.fromJson(
+              json['capabilities'] as Map<String, dynamic>)
+          : const BriefCapabilities(),
       worker: json['worker'] != null
           ? WorkerStatus.fromJson(json['worker'] as Map<String, dynamic>)
           : const WorkerStatus(),
@@ -127,8 +154,21 @@ class NovelBrief {
     );
   }
 
-  /// 是否已解析完成
-  bool get isParseCompleted => worker.parseCompleted;
+  /// 是否已解析完成（parse_phase=ready_for_assignment 或 worker.parseCompleted）
+  bool get isParseCompleted =>
+      parsePhase == 'ready_for_assignment' || worker.parseCompleted;
+
+  /// 是否可以分配音色
+  bool get canAssignVoice => capabilities.canAssignVoice;
+
+  /// 分配被禁用时的原因文案
+  String? get assignBlockReason => capabilities.assignBlockReason;
+
+  /// 是否正在解析角色
+  bool get isParsingCharacters => worker.newCharacters > 0;
+
+  /// 是否有冲突需要处理
+  bool get hasConflicts => worker.conflictCharacters > 0;
 
   /// 角色数量
   int get speakerCount => speakers.length;

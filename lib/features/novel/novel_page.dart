@@ -53,13 +53,6 @@ class _NovelPageState extends ConsumerState<NovelPage> {
   }
 
   void _openNovel(Novel novel) {
-    if (!novel.canPlay) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('小说尚未准备就绪: ${novel.status.name}')),
-      );
-      return;
-    }
-
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => NovelDetailPage(novel: novel),

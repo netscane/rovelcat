@@ -82,6 +82,20 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
   }
 
   Future<void> _assignVoiceToSpeaker(SpeakerInfo speaker) async {
+    final brief = _brief;
+
+    // 检查 capabilities 是否允许分配
+    if (brief != null && !brief.canAssignVoice) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            brief.assignBlockReason ?? '当前不支持分配音色',
+          ),
+        ),
+      );
+      return;
+    }
+
     final voiceState = ref.read(voiceListProvider);
     if (voiceState.voices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,6 +130,7 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
 
     result.fold(
       (error) {
+        // 后端闸门返回的冲突错误，直接透出文案
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('分配音色失败: $error')),
         );
@@ -186,6 +201,14 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            actions: [
+              // 刷新按钮
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: '刷新',
+                onPressed: _isLoading ? null : _loadBrief,
+              ),
+            ],
           ),
 
           // 内容区域
@@ -203,7 +226,7 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
             ),
         ],
       ),
-      // 底部播放按钮
+      // 底部播放按钮 —— 仅在小说状态为 ready 时显示
       bottomNavigationBar: widget.novel.canPlay
           ? _buildBottomBar(history)
           : null,
@@ -244,6 +267,7 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
   Widget _buildContent(dynamic history) {
     final brief = _brief!;
     final colorScheme = Theme.of(context).colorScheme;
+    final canAssign = brief.canAssignVoice;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -258,6 +282,24 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
           ),
 
           const SizedBox(height: 24),
+
+          // 角色解析进度提示（worker 字段）
+          if (!brief.isParseCompleted) ...[
+            _buildWorkerProgressHint(brief),
+            const SizedBox(height: 16),
+          ],
+
+          // 冲突提示
+          if (brief.hasConflicts) ...[
+            _buildConflictHint(brief),
+            const SizedBox(height: 16),
+          ],
+
+          // 音色分配禁用提示
+          if (!canAssign && brief.assignBlockReason != null && brief.speakers.isNotEmpty) ...[
+            _buildAssignBlockHint(brief.assignBlockReason!),
+            const SizedBox(height: 16),
+          ],
 
           // 角色/Speaker 列表
           if (brief.speakers.isNotEmpty) ...[
@@ -284,17 +326,130 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
             SpeakerListWidget(
               speakers: brief.speakers,
               onAssignVoice: _assignVoiceToSpeaker,
+              enabled: canAssign,
             ),
           ] else if (brief.isParseCompleted) ...[
             // 解析完成但没有 speakers
             _buildEmptySpeakersHint(),
-          ] else if (!brief.isParseCompleted && widget.novel.status != NovelStatus.ready) ...[
-            // 还在解析中
-            _buildParsingHint(),
           ],
 
           // 底部留白（给底部按钮让位）
           const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  /// 角色解析进度提示
+  Widget _buildWorkerProgressHint(NovelBrief brief) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final worker = brief.worker;
+
+    String progressText;
+    if (worker.newCharacters > 0) {
+      progressText = '正在解析角色中...已发现 ${worker.totalCharacters} 个角色，'
+          '${worker.newCharacters} 个待确认';
+    } else if (worker.totalCharacters > 0) {
+      progressText = '角色解析中...已发现 ${worker.totalCharacters} 个角色';
+    } else {
+      progressText = '小说正在解析中，角色信息稍后显示...';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.primary.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              progressText,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
+            ),
+          ),
+          // 刷新按钮
+          IconButton(
+            icon: Icon(Icons.refresh, size: 18, color: colorScheme.primary),
+            onPressed: _loadBrief,
+            tooltip: '刷新状态',
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 冲突提示
+  Widget _buildConflictHint(NovelBrief brief) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.error.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 20, color: colorScheme.error),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '有 ${brief.worker.conflictCharacters} 个角色存在冲突，需先处理冲突后才可分配音色。',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onErrorContainer,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 音色分配被禁用的提示
+  Widget _buildAssignBlockHint(String reason) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.lock_outline, size: 20, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              reason,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
         ],
       ),
     );
@@ -317,38 +472,6 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
               '该小说未检测到多角色对话，将使用默认音色朗读。',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildParsingHint() {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              '小说正在解析中，角色信息稍后显示...',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurface,
                   ),
             ),
           ),

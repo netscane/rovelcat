@@ -75,7 +75,7 @@ class NovelInfoHeader extends StatelessWidget {
             ),
 
             // 解析状态
-            if (!brief.isParseCompleted && novel.status == NovelStatus.processing) ...[
+            if (!brief.isParseCompleted) ...[
               const SizedBox(height: 12),
               const Divider(),
               const SizedBox(height: 8),
@@ -91,7 +91,7 @@ class NovelInfoHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '角色解析中...',
+                    _parsePhaseLabel(brief),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.primary,
                         ),
@@ -104,6 +104,36 @@ class NovelInfoHeader extends StatelessWidget {
                             color: colorScheme.onSurfaceVariant,
                           ),
                     ),
+                ],
+              ),
+            ] else ...[
+              // 解析完成标记
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 16,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '角色解析完成',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.primary,
+                        ),
+                  ),
+                  if (brief.canAssignVoice) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      '· 可分配音色',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -170,6 +200,28 @@ class NovelInfoHeader extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _parsePhaseLabel(NovelBrief brief) {
+    switch (brief.parsePhase) {
+      case 'uploading':
+        return '上传中...';
+      case 'parsing_text':
+        return '正在解析文本...';
+      case 'identifying_characters':
+        return '正在识别角色...';
+      case 'resolving_conflicts':
+        return '正在处理角色冲突...';
+      case 'assigning_voices':
+        return '正在自动分配音色...';
+      case 'ready_for_assignment':
+        return '角色解析完成';
+      default:
+        if (brief.worker.newCharacters > 0) {
+          return '角色解析中...';
+        }
+        return '解析中...';
+    }
   }
 }
 

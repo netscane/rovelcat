@@ -5,11 +5,14 @@ import '../../../data/models/novel_brief.dart';
 class SpeakerListWidget extends StatelessWidget {
   final List<SpeakerInfo> speakers;
   final Function(SpeakerInfo) onAssignVoice;
+  /// 是否允许分配音色（由 capabilities.can_assign_voice 控制）
+  final bool enabled;
 
   const SpeakerListWidget({
     super.key,
     required this.speakers,
     required this.onAssignVoice,
+    this.enabled = true,
   });
 
   @override
@@ -23,6 +26,7 @@ class SpeakerListWidget extends StatelessWidget {
         return _SpeakerTile(
           speaker: speaker,
           onAssignVoice: () => onAssignVoice(speaker),
+          enabled: enabled,
         );
       }).toList(),
     );
@@ -32,10 +36,12 @@ class SpeakerListWidget extends StatelessWidget {
 class _SpeakerTile extends StatelessWidget {
   final SpeakerInfo speaker;
   final VoidCallback onAssignVoice;
+  final bool enabled;
 
   const _SpeakerTile({
     required this.speaker,
     required this.onAssignVoice,
+    required this.enabled,
   });
 
   @override
@@ -57,106 +63,116 @@ class _SpeakerTile extends StatelessWidget {
           ),
         ),
         child: InkWell(
-          onTap: onAssignVoice,
+          onTap: enabled ? onAssignVoice : null,
           borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              children: [
-                // 角色头像
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: hasVoice
-                      ? colorScheme.primaryContainer
-                      : colorScheme.surfaceContainerHighest,
-                  child: Text(
-                    speaker.name.isNotEmpty ? speaker.name[0] : '?',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: hasVoice
-                          ? colorScheme.onPrimaryContainer
-                          : colorScheme.onSurfaceVariant,
+          child: Opacity(
+            opacity: enabled ? 1.0 : 0.6,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  // 角色头像
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: hasVoice
+                        ? colorScheme.primaryContainer
+                        : colorScheme.surfaceContainerHighest,
+                    child: Text(
+                      speaker.name.isNotEmpty ? speaker.name[0] : '?',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: hasVoice
+                            ? colorScheme.onPrimaryContainer
+                            : colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
+                  const SizedBox(width: 12),
 
-                // 角色信息
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              speaker.name,
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (speaker.importance != null) ...[
-                            const SizedBox(width: 6),
-                            _ImportanceBadge(importance: speaker.importance!),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          // 台词数量
-                          Icon(
-                            Icons.chat_bubble_outline,
-                            size: 12,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${speaker.utteranceCount} 句台词',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                          // 音色信息
-                          if (hasVoice) ...[
-                            const SizedBox(width: 12),
-                            Icon(
-                              Icons.record_voice_over,
-                              size: 12,
-                              color: colorScheme.primary,
-                            ),
-                            const SizedBox(width: 4),
+                  // 角色信息
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
                             Flexible(
                               child: Text(
-                                speaker.voiceName ?? '已分配',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.primary,
-                                      fontWeight: FontWeight.w500,
+                                speaker.name,
+                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w600,
                                     ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (speaker.importance != null) ...[
+                              const SizedBox(width: 6),
+                              _ImportanceBadge(importance: speaker.importance!),
+                            ],
                           ],
-                        ],
-                      ),
-                    ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            // 台词数量
+                            Icon(
+                              Icons.chat_bubble_outline,
+                              size: 12,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${speaker.utteranceCount} 句台词',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                            // 音色信息
+                            if (hasVoice) ...[
+                              const SizedBox(width: 12),
+                              Icon(
+                                Icons.record_voice_over,
+                                size: 12,
+                                color: colorScheme.primary,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  speaker.voiceName ?? '已分配',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.primary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
-                // 操作按钮
-                Icon(
-                  hasVoice ? Icons.edit_outlined : Icons.add_circle_outline,
-                  size: 20,
-                  color: hasVoice
-                      ? colorScheme.onSurfaceVariant
-                      : colorScheme.primary,
-                ),
-              ],
+                  // 操作按钮
+                  if (enabled)
+                    Icon(
+                      hasVoice ? Icons.edit_outlined : Icons.add_circle_outline,
+                      size: 20,
+                      color: hasVoice
+                          ? colorScheme.onSurfaceVariant
+                          : colorScheme.primary,
+                    )
+                  else
+                    Icon(
+                      Icons.lock_outline,
+                      size: 18,
+                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
