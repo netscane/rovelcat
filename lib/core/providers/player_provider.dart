@@ -543,29 +543,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   void _submitPrefetchBatch(List<int> indices) {
     if (_disposed || !mounted || state.session == null) return;
     if (indices.isEmpty) return;
-    if (state.voice == null) return;
 
     // 取出可提交的索引（最多 batchSize 个）
     final toSubmit = indices.take(_maxConcurrentPrefetch).toList();
     if (toSubmit.isEmpty) return;
 
-    // 收集段落文本内容
-    final texts = <String>[];
-    final validIndices = <int>[];
-    for (final idx in toSubmit) {
-      final segment = state.segments.where((s) => s.index == idx).firstOrNull;
-      if (segment != null) {
-        texts.add(segment.content);
-        validIndices.add(idx);
-      }
-    }
-
-    if (texts.isEmpty) return;
-
     // 更新任务状态为 pending
     final tasks = Map<int, SegmentTask>.from(state.tasks);
     final now = DateTime.now();
-    for (final idx in validIndices) {
+    for (final idx in toSubmit) {
       tasks[idx] = SegmentTask(
         sessionId: state.session!.sessionId,
         segmentIndex: idx,
@@ -576,12 +562,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
     _safeSetState(state.copyWith(tasks: tasks));
 
-    // 提交到服务器（新接口：texts + voice_id）
-    _api.submitInfer(texts, state.voice!.id).then((result) {
+    // 提交到服务器（新接口：session_id + utterance_indices）
+    _api.submitInfer(state.session!.sessionId, toSubmit).then((result) {
       if (_disposed || !mounted) return;
       result.fold(
         (error) {
           debugPrint('Submit infer error: $error');
+          // 清除 pending 状态，允许重试
+          if (_disposed || !mounted) return;
+          final tasks = Map<int, SegmentTask>.from(state.tasks);
+          for (final idx in toSubmit) {
+            tasks.remove(idx);
+          }
+          _safeSetState(state.copyWith(tasks: tasks));
         },
         (List<TaskInfo> taskInfos) {
           if (_disposed || !mounted) return;

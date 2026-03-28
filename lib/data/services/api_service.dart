@@ -372,15 +372,16 @@ class ApiService {
 
   // ========== Inference APIs ==========
 
-  /// 提交即时推理任务
-  /// 新接口: {texts: [...], voice_id: "..."}
+  /// 提交推理任务（新架构：通过 session + utterance indices）
+  /// 请求: { session_id: "...", utterance_indices: [0, 1, 2] }
+  /// 服务端根据 session 的 novel_id 和 voice_id 自行查找文本和音色
   Future<Result<List<TaskInfo>>> submitInfer(
-    List<String> texts,
-    String voiceId,
+    String sessionId,
+    List<int> utteranceIndices,
   ) async {
     final response = await _dio.post('/infer/submit', data: {
-      'texts': texts,
-      'voice_id': voiceId,
+      'session_id': sessionId,
+      'utterance_indices': utteranceIndices,
     });
     final apiResp = ApiResponse<List<TaskInfo>>.fromJson(
       response.data,
