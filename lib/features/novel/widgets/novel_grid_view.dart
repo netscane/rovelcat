@@ -50,7 +50,7 @@ class _NovelGridItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isReady = novel.canPlay;
+    final isProcessing = novel.status != NovelStatus.ready && novel.status != NovelStatus.error;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -63,7 +63,7 @@ class _NovelGridItem extends StatelessWidget {
         ),
       ),
       child: InkWell(
-        onTap: isReady ? onTap : null,
+        onTap: onTap,
         onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(16),
         child: Stack(
@@ -136,7 +136,7 @@ class _NovelGridItem extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${novel.totalSegments} 段',
+                              '${novel.totalUtterances} 段',
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: colorScheme.onSurfaceVariant,
                                   ),
@@ -149,8 +149,8 @@ class _NovelGridItem extends StatelessWidget {
                 ),
               ],
             ),
-            // 状态遮罩
-            if (!isReady)
+            // 状态遮罩 - 仅在处理中状态显示
+            if (isProcessing)
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -188,6 +188,24 @@ class _NovelGridItem extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ),
+            // 错误状态指示器
+            if (novel.status == NovelStatus.error)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: colorScheme.errorContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.error_outline,
+                    size: 16,
+                    color: colorScheme.onErrorContainer,
                   ),
                 ),
               ),

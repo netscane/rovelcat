@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart' as just_audio;
 import '../../data/models/novel.dart';
 import '../../data/models/voice.dart';
-import '../../data/models/segment.dart';
+import '../../data/models/utterance.dart';
 import '../../data/models/play_session.dart';
-import '../../data/models/segment_task.dart';
+import '../../data/models/utterance_task.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/websocket_service.dart';
 import 'settings_provider.dart';
@@ -20,21 +20,21 @@ class PlayerState {
   final PlaySession? session;
   final Novel? novel;
   final Voice? voice;
-  final List<Segment> segments;
-  final int currentSegmentIndex;
+  final List<Utterance> utterances;
+  final int currentUtteranceIndex;
   final PlaybackState playbackState;
   final bool waitingForAudio;
   final String? error;
 
   // 分页相关
-  final int totalSegments;
+  final int totalUtterances;
   final int loadedStart;
   final int loadedEnd;
   final bool hasMore;
   final bool loadingMore;
 
   // 任务管理
-  final Map<int, SegmentTask> tasks;
+  final Map<int, UtteranceTask> tasks;
 
   // Session 版本，用于防止旧 WS 事件污染新状态
   final int version;
@@ -43,12 +43,12 @@ class PlayerState {
     this.session,
     this.novel,
     this.voice,
-    this.segments = const [],
-    this.currentSegmentIndex = 0,
+    this.utterances = const [],
+    this.currentUtteranceIndex = 0,
     this.playbackState = PlaybackState.stopped,
     this.waitingForAudio = false,
     this.error,
-    this.totalSegments = 0,
+    this.totalUtterances = 0,
     this.loadedStart = 0,
     this.loadedEnd = 0,
     this.hasMore = false,
@@ -61,29 +61,29 @@ class PlayerState {
     PlaySession? session,
     Novel? novel,
     Voice? voice,
-    List<Segment>? segments,
-    int? currentSegmentIndex,
+    List<Utterance>? utterances,
+    int? currentUtteranceIndex,
     PlaybackState? playbackState,
     bool? waitingForAudio,
     String? error,
-    int? totalSegments,
+    int? totalUtterances,
     int? loadedStart,
     int? loadedEnd,
     bool? hasMore,
     bool? loadingMore,
-    Map<int, SegmentTask>? tasks,
+    Map<int, UtteranceTask>? tasks,
     int? version,
   }) {
     return PlayerState(
       session: session ?? this.session,
       novel: novel ?? this.novel,
       voice: voice ?? this.voice,
-      segments: segments ?? this.segments,
-      currentSegmentIndex: currentSegmentIndex ?? this.currentSegmentIndex,
+      utterances: utterances ?? this.utterances,
+      currentUtteranceIndex: currentUtteranceIndex ?? this.currentUtteranceIndex,
       playbackState: playbackState ?? this.playbackState,
       waitingForAudio: waitingForAudio ?? this.waitingForAudio,
       error: error,
-      totalSegments: totalSegments ?? this.totalSegments,
+      totalUtterances: totalUtterances ?? this.totalUtterances,
       loadedStart: loadedStart ?? this.loadedStart,
       loadedEnd: loadedEnd ?? this.loadedEnd,
       hasMore: hasMore ?? this.hasMore,
@@ -93,7 +93,7 @@ class PlayerState {
     );
   }
 
-  bool isSegmentReady(int index) {
+  bool isUtteranceReady(int index) {
     return tasks[index]?.state == TaskState.ready;
   }
 }
@@ -196,11 +196,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       state.copyWith(
         novel: novel,
         voice: voice,
-        segments: [],
-        currentSegmentIndex: startIndex,
+        utterances: [],
+        currentUtteranceIndex: startIndex,
         playbackState: PlaybackState.loading,
         waitingForAudio: true,
-        totalSegments: novel.totalSegments,
+        totalUtterances: novel.totalUtterances,
         loadedStart: 0,
         loadedEnd: 0,
         hasMore: true,
@@ -226,7 +226,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _safeSetState(
           state.copyWith(
             session: session,
-            currentSegmentIndex: session.currentIndex,
+            currentUtteranceIndex: session.currentIndex,
           ),
         );
 
@@ -236,7 +236,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _wsSub = _wsService.sessionEvents.listen(_handleWsEvent);
 
         // 加载段落
-        await _loadSegments(startIndex: (startIndex - 5).clamp(0, startIndex));
+        await _loadUtterances(startIndex: (startIndex - 5).clamp(0, startIndex));
       },
     );
   }
@@ -244,12 +244,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 从历史记录恢复播放
   Future<void> restoreFromHistory({
     required String novelId,
-    required int segmentIndex,
+    required int utteranceIndex,
     required String voiceId,
   }) async {
     // 这个方法只是标记 - 实际恢复由外部调用 startPlayback 时传入正确的参数
     // 保留此方法为未来的状态持久化扩展预留接口
-    debugPrint('restoreFromHistory: novelId=$novelId, segmentIndex=$segmentIndex, voiceId=$voiceId');
+    debugPrint('restoreFromHistory: novelId=$novelId, utteranceIndex=$utteranceIndex, voiceId=$voiceId');
   }
 
   /// 停止播放
@@ -336,7 +336,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         debugPrint('PlayerNotifier.seekTo(): success, newIndex=$newIndex');
         // 检查是否需要加载新段落
         if (newIndex < state.loadedStart || newIndex >= state.loadedEnd) {
-          await _loadSegments(
+          await _loadUtterances(
             startIndex: (newIndex - 5).clamp(0, newIndex),
             replace: true,
           );
@@ -344,7 +344,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
         // 更新当前索引
         _safeSetState(
-          state.copyWith(currentSegmentIndex: newIndex),
+          state.copyWith(currentUtteranceIndex: newIndex),
         );
 
         _submitPrefetchTasks();
@@ -378,7 +378,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   /// 加载更多段落
-  Future<void> loadMoreSegments() async {
+  Future<void> loadMoreUtterances() async {
     if (_disposed ||
         state.loadingMore ||
         !state.hasMore ||
@@ -387,15 +387,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
 
     _safeSetState(state.copyWith(loadingMore: true));
-    await _loadSegments(startIndex: state.loadedEnd, append: true);
+    await _loadUtterances(startIndex: state.loadedEnd, append: true);
   }
 
   /// 从停止状态开始播放
   void startPlayingFromStopped() {
     if (_disposed || state.session == null) return;
 
-    if (state.isSegmentReady(state.currentSegmentIndex)) {
-      _loadAndPlayAudio(state.currentSegmentIndex);
+    if (state.isUtteranceReady(state.currentUtteranceIndex)) {
+      _loadAndPlayAudio(state.currentUtteranceIndex);
     } else {
       _safeSetState(
         state.copyWith(
@@ -409,14 +409,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   // ========== 私有方法 ==========
 
-  Future<void> _loadSegments({
+  Future<void> _loadUtterances({
     required int startIndex,
     bool replace = false,
     bool append = false,
   }) async {
     if (_disposed || state.session == null) return;
 
-    final result = await _api.getSegments(
+    final result = await _api.getUtterances(
       state.session!.novelId,
       start: startIndex,
       limit: _pageSize,
@@ -431,43 +431,43 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           state.copyWith(loadingMore: false, error: error),
         );
       },
-      (SegmentsResponse data) {
+      (UtterancesResponse data) {
         if (_disposed || !mounted) return;
-        final newSegments = data.segments;
+        final newUtterances = data.utterances;
 
-        List<Segment> segments;
+        List<Utterance> utterances;
         int loadedStart;
         int loadedEnd;
 
-        if (replace || state.segments.isEmpty) {
-          segments = newSegments;
-          loadedStart = newSegments.isNotEmpty ? newSegments.first.index : 0;
-          loadedEnd = newSegments.isNotEmpty
-              ? newSegments.last.index + 1
+        if (replace || state.utterances.isEmpty) {
+          utterances = newUtterances;
+          loadedStart = newUtterances.isNotEmpty ? newUtterances.first.index : 0;
+          loadedEnd = newUtterances.isNotEmpty
+              ? newUtterances.last.index + 1
               : loadedStart;
         } else if (append) {
-          segments = [...state.segments, ...newSegments];
+          utterances = [...state.utterances, ...newUtterances];
           loadedStart = state.loadedStart;
-          loadedEnd = segments.isNotEmpty
-              ? segments.last.index + 1
+          loadedEnd = utterances.isNotEmpty
+              ? utterances.last.index + 1
               : loadedStart;
         } else {
-          segments = newSegments;
-          loadedStart = newSegments.isNotEmpty ? newSegments.first.index : 0;
-          loadedEnd = newSegments.isNotEmpty
-              ? newSegments.last.index + 1
+          utterances = newUtterances;
+          loadedStart = newUtterances.isNotEmpty ? newUtterances.first.index : 0;
+          loadedEnd = newUtterances.isNotEmpty
+              ? newUtterances.last.index + 1
               : loadedStart;
         }
 
-        // 使用 API 返回的 total，但如果已有正确的 totalSegments 则保留
-        final total = state.totalSegments > 0
-            ? state.totalSegments
+        // 使用 API 返回的 total，但如果已有正确的 totalUtterances 则保留
+        final total = state.totalUtterances > 0
+            ? state.totalUtterances
             : data.total;
 
         _safeSetState(
           state.copyWith(
-            segments: segments,
-            totalSegments: total,
+            utterances: utterances,
+            totalUtterances: total,
             loadedStart: loadedStart,
             loadedEnd: loadedEnd,
             hasMore: loadedEnd < total,
@@ -502,7 +502,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     
     // 计算已经加载完成的数量（ready 状态，且在当前段落之后）
     int readyCount = 0;
-    for (int i = state.currentSegmentIndex; i < state.currentSegmentIndex + prefetchCount + 1 && i < state.totalSegments; i++) {
+    for (int i = state.currentUtteranceIndex; i < state.currentUtteranceIndex + prefetchCount + 1 && i < state.totalUtterances; i++) {
       final task = state.tasks[i];
       if (task != null && task.state == TaskState.ready) {
         readyCount++;
@@ -510,20 +510,20 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
     
     // 计算还需要加载的数量
-    final targetCount = (prefetchCount + 1).clamp(0, state.totalSegments - state.currentSegmentIndex);
+    final targetCount = (prefetchCount + 1).clamp(0, state.totalUtterances - state.currentUtteranceIndex);
     final needToLoad = targetCount - readyCount;
     
-    // 如果需要加载的数量 > batchSize，则加载下一批
-    if (needToLoad <= _maxConcurrentPrefetch) return;
+    // 如果需要加载的数量 <= 0，则不需要加载
+    if (needToLoad <= 0) return;
     
     // 收集需要加载的索引
     final indices = <int>[];
-    final end = (state.currentSegmentIndex + prefetchCount + 1).clamp(
+    final end = (state.currentUtteranceIndex + prefetchCount + 1).clamp(
       0,
-      state.totalSegments,
+      state.totalUtterances,
     );
 
-    for (int i = state.currentSegmentIndex; i < end; i++) {
+    for (int i = state.currentUtteranceIndex; i < end; i++) {
       final task = state.tasks[i];
       if (task == null ||
           (task.state != TaskState.pending &&
@@ -549,12 +549,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (toSubmit.isEmpty) return;
 
     // 更新任务状态为 pending
-    final tasks = Map<int, SegmentTask>.from(state.tasks);
+    final tasks = Map<int, UtteranceTask>.from(state.tasks);
     final now = DateTime.now();
     for (final idx in toSubmit) {
-      tasks[idx] = SegmentTask(
+      tasks[idx] = UtteranceTask(
         sessionId: state.session!.sessionId,
-        segmentIndex: idx,
+        utteranceIndex: idx,
         state: TaskState.pending,
         createdAt: now,
         version: state.version,
@@ -570,7 +570,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           debugPrint('Submit infer error: $error');
           // 清除 pending 状态，允许重试
           if (_disposed || !mounted) return;
-          final tasks = Map<int, SegmentTask>.from(state.tasks);
+          final tasks = Map<int, UtteranceTask>.from(state.tasks);
           for (final idx in toSubmit) {
             tasks.remove(idx);
           }
@@ -578,21 +578,21 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         },
         (List<TaskInfo> taskInfos) {
           if (_disposed || !mounted) return;
-          final tasks = Map<int, SegmentTask>.from(state.tasks);
+          final tasks = Map<int, UtteranceTask>.from(state.tasks);
           for (final info in taskInfos) {
-            final task = tasks[info.segmentIndex];
+            final task = tasks[info.utteranceIndex];
             if (task != null) {
-              tasks[info.segmentIndex] = task.copyWith(
+              tasks[info.utteranceIndex] = task.copyWith(
                 taskId: info.taskId,
                 state: TaskState.fromString(info.state),
               );
             }
 
-            if (info.segmentIndex == state.currentSegmentIndex &&
+            if (info.utteranceIndex == state.currentUtteranceIndex &&
                 info.state == 'ready' &&
                 (state.waitingForAudio ||
                     state.playbackState == PlaybackState.loading)) {
-              _loadAndPlayAudio(state.currentSegmentIndex);
+              _loadAndPlayAudio(state.currentUtteranceIndex);
             }
           }
           _safeSetState(state.copyWith(tasks: tasks));
@@ -601,16 +601,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     });
   }
 
-  Future<void> _loadAndPlayAudio(int segmentIndex) async {
+  Future<void> _loadAndPlayAudio(int utteranceIndex) async {
     if (_disposed || !mounted || state.session == null) return;
     if (state.voice == null) {
       _safeSetState(state.copyWith(error: 'Voice not set'));
       return;
     }
 
-    final data = await _api.getSegmentAudio(
+    final data = await _api.getUtteranceAudio(
       state.session!.novelId,
-      segmentIndex,
+      utteranceIndex,
       state.voice!.id,
     );
 
@@ -650,21 +650,21 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     debugPrint('_onAudioFinished called: playbackState=${state.playbackState}');
     if (state.playbackState != PlaybackState.playing) return;
 
-    if (state.currentSegmentIndex + 1 >= state.totalSegments) {
+    if (state.currentUtteranceIndex + 1 >= state.totalUtterances) {
       _safeSetState(state.copyWith(playbackState: PlaybackState.stopped));
       return;
     }
 
-    final nextIndex = state.currentSegmentIndex + 1;
+    final nextIndex = state.currentUtteranceIndex + 1;
 
     // 检查是否就绪
-    if (state.isSegmentReady(nextIndex)) {
-      _safeSetState(state.copyWith(currentSegmentIndex: nextIndex));
+    if (state.isUtteranceReady(nextIndex)) {
+      _safeSetState(state.copyWith(currentUtteranceIndex: nextIndex));
       _loadAndPlayAudio(nextIndex);
     } else {
       _safeSetState(
         state.copyWith(
-          currentSegmentIndex: nextIndex,
+          currentUtteranceIndex: nextIndex,
           playbackState: PlaybackState.loading,
           waitingForAudio: true,
         ),
@@ -684,21 +684,21 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         if (event.sessionId != state.session!.sessionId) return;
 
         // 检查任务是否属于当前 version
-        final task = state.tasks[event.segmentIndex];
+        final task = state.tasks[event.utteranceIndex];
         if (task != null && task.sessionId != state.session!.sessionId) {
-          debugPrint('Ignoring task from old session: ${event.segmentIndex}');
+          debugPrint('Ignoring task from old session: ${event.utteranceIndex}');
           return;
         }
 
         // 检查任务是否属于当前 version（防止旧 seek/start 的事件污染新状态）
         if (task != null && task.version != state.version) {
-          debugPrint('Ignoring task from old version: ${event.segmentIndex}, task.version=${task.version}, state.version=${state.version}');
+          debugPrint('Ignoring task from old version: ${event.utteranceIndex}, task.version=${task.version}, state.version=${state.version}');
           return;
         }
 
-        final tasks = Map<int, SegmentTask>.from(state.tasks);
+        final tasks = Map<int, UtteranceTask>.from(state.tasks);
         if (task != null) {
-          tasks[event.segmentIndex] = task.copyWith(
+          tasks[event.utteranceIndex] = task.copyWith(
             taskId: event.taskId,
             state: TaskState.fromString(event.state),
             durationMs: event.durationMs,
@@ -706,10 +706,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             version: state.version,
           );
         } else {
-          tasks[event.segmentIndex] = SegmentTask(
+          tasks[event.utteranceIndex] = UtteranceTask(
             sessionId: event.sessionId,
             taskId: event.taskId,
-            segmentIndex: event.segmentIndex,
+            utteranceIndex: event.utteranceIndex,
             state: TaskState.fromString(event.state),
             durationMs: event.durationMs,
             error: event.error,
@@ -723,11 +723,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _safeSetState(state.copyWith(tasks: tasks));
 
         // 检查当前段落是否就绪
-        if (event.segmentIndex == state.currentSegmentIndex &&
+        if (event.utteranceIndex == state.currentUtteranceIndex &&
             event.state == 'ready' &&
             (state.waitingForAudio ||
                 state.playbackState == PlaybackState.loading)) {
-          _loadAndPlayAudio(state.currentSegmentIndex);
+          _loadAndPlayAudio(state.currentUtteranceIndex);
         }
       } else if (event is SessionClosedEvent) {
         if (_disposed || !mounted || !hasListeners) return;
@@ -761,7 +761,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   void _cleanupTasks() {
     if (_disposed || !mounted) return;
     final now = DateTime.now();
-    final tasks = Map<int, SegmentTask>.from(state.tasks);
+    final tasks = Map<int, UtteranceTask>.from(state.tasks);
     final originalLength = tasks.length;
     tasks.removeWhere(
       (_, task) =>

@@ -5,7 +5,7 @@ import '../../core/providers/voice_provider.dart';
 import '../../core/providers/history_provider.dart';
 import '../../data/models/novel.dart';
 import '../../data/models/voice.dart';
-import 'widgets/segment_list.dart';
+import 'widgets/utterance_list.dart';
 import 'widgets/player_controls.dart';
 import 'widgets/voice_selector_sheet.dart';
 import 'controllers/scroll_controller_delegate.dart';
@@ -37,7 +37,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       scrollController: ScrollController(),
       onLoadMore: () {
         if (mounted) {
-          ref.read(playerProvider.notifier).loadMoreSegments();
+          ref.read(playerProvider.notifier).loadMoreUtterances();
         }
       },
     );
@@ -52,28 +52,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted || _scrollDelegate.isNavigatingAway) return;
 
     try {
-      // 当 currentSegmentIndex 变化时，自动滚动到该段落
+      // 当 currentUtteranceIndex 变化时，自动滚动到该段落
       if (previous != null &&
-          previous.currentSegmentIndex != current.currentSegmentIndex) {
-        _scrollDelegate.scrollToSegmentWhenReady(current.currentSegmentIndex);
+          previous.currentUtteranceIndex != current.currentUtteranceIndex) {
+        _scrollDelegate.scrollToSegmentWhenReady(current.currentUtteranceIndex);
       }
 
       // 段落加载完成后检查是否需要继续加载更多
-      final segmentsChanged = previous?.segments.length != current.segments.length;
+      final segmentsChanged = previous?.utterances.length != current.utterances.length;
       if (segmentsChanged && current.hasMore && !current.loadingMore) {
         _scrollDelegate.checkAutoLoadMore();
       }
 
       // 新增：段落数据首次加载完成后，滚动到当前播放段落
-      final wasEmpty = previous == null ? true : previous.segments.isEmpty;
-      final isNowLoaded = current.segments.isNotEmpty;
+      final wasEmpty = previous == null ? true : previous.utterances.isEmpty;
+      final isNowLoaded = current.utterances.isNotEmpty;
       final isPlaying = current.playbackState == PlaybackState.playing;
 
       if (wasEmpty && isNowLoaded && isPlaying) {
         debugPrint(
-          'Initial segments loaded, scrolling to current segment: ${current.currentSegmentIndex}',
+          'Initial utterances loaded, scrolling to current utterance: ${current.currentUtteranceIndex}',
         );
-        _scrollDelegate.scrollToSegmentWhenReady(current.currentSegmentIndex);
+        _scrollDelegate.scrollToSegmentWhenReady(current.currentUtteranceIndex);
       }
     } catch (e) {
       // 忽略 dispose 后的错误
@@ -135,10 +135,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             .savePlayProgress(
               novelId: playerState.novel!.id,
               novelTitle: playerState.novel!.title,
-              segmentIndex: playerState.currentSegmentIndex,
+              utteranceIndex: playerState.currentUtteranceIndex,
               voiceId: playerState.voice!.id,
               voiceName: playerState.voice!.name,
-              totalSegments: playerState.totalSegments,
+              totalUtterances: playerState.totalUtterances,
             );
       }
     } catch (e) {
@@ -251,11 +251,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   Widget _buildSegmentList(PlayerState state) {
     if (state.playbackState == PlaybackState.loading &&
-        state.segments.isEmpty) {
+        state.utterances.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (state.error != null && state.segments.isEmpty) {
+    if (state.error != null && state.utterances.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -280,15 +280,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
     }
 
-    return SegmentList(
-      segments: state.segments,
-      currentIndex: state.currentSegmentIndex,
+    return UtteranceList(
+      utterances: state.utterances,
+      currentIndex: state.currentUtteranceIndex,
       loadedStart: state.loadedStart,
       tasks: state.tasks,
       hasMore: state.hasMore,
       loadingMore: state.loadingMore,
       scrollController: _scrollDelegate.scrollController,
-      onSegmentTap: _onSegmentTap,
+      onUtteranceTap: _onSegmentTap,
       scrollToIndex: _scrollDelegate.scrollToIndex,
       onScrollCompleted: () {
         if (!mounted) return;
@@ -314,16 +314,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   void _onPrevious() {
     if (_scrollDelegate.isNavigatingAway || !mounted) return;
     final state = ref.read(playerProvider);
-    if (state.currentSegmentIndex > 0) {
-      ref.read(playerProvider.notifier).seekTo(state.currentSegmentIndex - 1);
+    if (state.currentUtteranceIndex > 0) {
+      ref.read(playerProvider.notifier).seekTo(state.currentUtteranceIndex - 1);
     }
   }
 
   void _onNext() {
     if (_scrollDelegate.isNavigatingAway || !mounted) return;
     final state = ref.read(playerProvider);
-    if (state.currentSegmentIndex < state.totalSegments - 1) {
-      ref.read(playerProvider.notifier).seekTo(state.currentSegmentIndex + 1);
+    if (state.currentUtteranceIndex < state.totalUtterances - 1) {
+      ref.read(playerProvider.notifier).seekTo(state.currentUtteranceIndex + 1);
     }
   }
 

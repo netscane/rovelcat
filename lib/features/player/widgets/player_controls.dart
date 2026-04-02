@@ -21,8 +21,8 @@ class PlayerControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final progress = state.totalSegments > 0
-        ? (state.currentSegmentIndex + 1) / state.totalSegments
+    final progress = state.totalUtterances > 0
+        ? (state.currentUtteranceIndex + 1) / state.totalUtterances
         : 0.0;
 
     return Container(
@@ -44,8 +44,8 @@ class PlayerControls extends StatelessWidget {
             // 进度条
             _ProgressSlider(
               progress: progress,
-              currentIndex: state.currentSegmentIndex,
-              totalSegments: state.totalSegments,
+              currentIndex: state.currentUtteranceIndex,
+              totalSegments: state.totalUtterances,
               onSeek: onSeek,
             ),
             // 控制按钮
@@ -57,7 +57,7 @@ class PlayerControls extends StatelessWidget {
                   // 进度信息
                   Expanded(
                     child: Text(
-                      '${state.currentSegmentIndex + 1} / ${state.totalSegments}',
+                      '${state.currentUtteranceIndex + 1} / ${state.totalUtterances}',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -65,7 +65,7 @@ class PlayerControls extends StatelessWidget {
                   ),
                   // 上一段
                   IconButton(
-                    onPressed: state.currentSegmentIndex > 0 ? onPrevious : null,
+                    onPressed: state.currentUtteranceIndex > 0 ? onPrevious : null,
                     icon: const Icon(Icons.skip_previous_rounded),
                     iconSize: 32,
                     color: colorScheme.onSurface,
@@ -81,7 +81,7 @@ class PlayerControls extends StatelessWidget {
                   const SizedBox(width: 8),
                   // 下一段
                   IconButton(
-                    onPressed: state.currentSegmentIndex < state.totalSegments - 1
+                    onPressed: state.currentUtteranceIndex < state.totalUtterances - 1
                         ? onNext
                         : null,
                     icon: const Icon(Icons.skip_next_rounded),

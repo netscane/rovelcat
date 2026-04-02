@@ -6,19 +6,6 @@ import '../../data/services/api_service.dart';
 import '../../data/models/voice.dart';
 import '../../core/providers/voice_provider.dart';
 
-/// 标签组数据
-class _TagGroup {
-  final String key;
-  final String label;
-  final List<String> tags;
-
-  const _TagGroup({
-    required this.key,
-    required this.label,
-    required this.tags,
-  });
-}
-
 /// 标签选项数据
 class _TagOption {
   final String value;
@@ -66,7 +53,8 @@ class _UploadVoicePageState extends ConsumerState<UploadVoicePage> {
     _TagOption(value: 'middle', label: '中年'),
     _TagOption(value: 'elder', label: '老年'),
   ];
-  List<_TagGroup> _tagGroups = [];
+  // Available tags from server (e.g., ["male", "female", "young", "old", ...])
+  List<String> _availableTags = [];
 
   @override
   void initState() {
@@ -93,44 +81,9 @@ class _UploadVoicePageState extends ConsumerState<UploadVoicePage> {
         debugPrint('Failed to load tag options: $error');
         setState(() => _isLoadingTags = false);
       },
-      (data) {
+      (tagList) {
         setState(() {
-          _maxTags = data['max_tags'] as int? ?? 20;
-
-          // 解析性别选项
-          final genderList = data['gender_options'] as List?;
-          if (genderList != null) {
-            _genderOptions = genderList
-                .map((e) => _TagOption(
-                      value: e['value'] as String,
-                      label: e['label'] as String,
-                    ))
-                .toList();
-          }
-
-          // 解析年龄段选项
-          final ageList = data['age_group_options'] as List?;
-          if (ageList != null) {
-            _ageGroupOptions = ageList
-                .map((e) => _TagOption(
-                      value: e['value'] as String,
-                      label: e['label'] as String,
-                    ))
-                .toList();
-          }
-
-          // 解析标签组
-          final groups = data['groups'] as List?;
-          if (groups != null) {
-            _tagGroups = groups
-                .map((e) => _TagGroup(
-                      key: e['key'] as String,
-                      label: e['label'] as String,
-                      tags: (e['tags'] as List).map((t) => t as String).toList(),
-                    ))
-                .toList();
-          }
-
+          _availableTags = tagList;
           _isLoadingTags = false;
         });
       },
@@ -389,20 +342,65 @@ class _UploadVoicePageState extends ConsumerState<UploadVoicePage> {
               ),
               const SizedBox(height: 16),
 
-              // 标签组
-              ..._tagGroups.map((group) => _buildTagGroup(context, group)),
-
-              // 已选标签计数
-              if (_selectedTags.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    '已选 ${_selectedTags.length} / $_maxTags 个标签',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                  ),
+              // 可用标签列表
+              if (_availableTags.isNotEmpty) ...[
+                Text(
+                  '标签（多选）',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
                 ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: _availableTags.map((tag) {
+                    final isSelected = _selectedTags.contains(tag);
+                    final isDisabled =
+                        !isSelected && _selectedTags.length >= _maxTags;
+
+                    return FilterChip(
+                      label: Text(tag),
+                      selected: isSelected,
+                      onSelected: (_isUploading || isDisabled)
+                          ? null
+                          : (_) => _toggleTag(tag),
+                      labelStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: isSelected
+                                ? colorScheme.onPrimaryContainer
+                                : isDisabled
+                                    ? colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
+                                    : colorScheme.onSurfaceVariant,
+                            fontWeight: isSelected ? FontWeight.w600 : null,
+                          ),
+                      selectedColor: colorScheme.primaryContainer,
+                      backgroundColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      checkmarkColor: colorScheme.onPrimaryContainer,
+                      side: BorderSide(
+                        color: isSelected
+                            ? colorScheme.primary.withValues(alpha: 0.5)
+                            : colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    );
+                  }).toList(),
+                ),
+
+                // 已选标签计数
+                if (_selectedTags.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '已选 ${_selectedTags.length} / $_maxTags 个标签',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ),
+              ],
             ],
 
             const SizedBox(height: 16),
@@ -524,64 +522,6 @@ class _UploadVoicePageState extends ConsumerState<UploadVoicePage> {
           ),
         ),
       ],
-    );
-  }
-
-  /// 构建标签组（风格、场景、语言）
-  Widget _buildTagGroup(BuildContext context, _TagGroup group) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            group.label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: group.tags.map((tag) {
-              final isSelected = _selectedTags.contains(tag);
-              final isDisabled =
-                  !isSelected && _selectedTags.length >= _maxTags;
-
-              return FilterChip(
-                label: Text(tag),
-                selected: isSelected,
-                onSelected: (_isUploading || isDisabled)
-                    ? null
-                    : (_) => _toggleTag(tag),
-                labelStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: isSelected
-                          ? colorScheme.onPrimaryContainer
-                          : isDisabled
-                              ? colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
-                              : colorScheme.onSurfaceVariant,
-                      fontWeight: isSelected ? FontWeight.w600 : null,
-                    ),
-                selectedColor: colorScheme.primaryContainer,
-                backgroundColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                checkmarkColor: colorScheme.onPrimaryContainer,
-                side: BorderSide(
-                  color: isSelected
-                      ? colorScheme.primary.withValues(alpha: 0.5)
-                      : colorScheme.outlineVariant.withValues(alpha: 0.3),
-                ),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -46,10 +46,10 @@ class BatchTask {
   final String taskId;
   final String novelId;
   final String voiceId;
-  final int segmentStart;
-  final int segmentEnd;
+  final int utteranceStart;
+  final int utteranceEnd;
   final int currentIndex;
-  final int totalSegments;
+  final int totalUtterances;
   final BatchTaskStatus status;
   final double progressPercent;
   final String? errorMessage;
@@ -58,10 +58,10 @@ class BatchTask {
     required this.taskId,
     required this.novelId,
     required this.voiceId,
-    required this.segmentStart,
-    required this.segmentEnd,
+    required this.utteranceStart,
+    required this.utteranceEnd,
     required this.currentIndex,
-    required this.totalSegments,
+    required this.totalUtterances,
     required this.status,
     required this.progressPercent,
     this.errorMessage,
@@ -72,10 +72,10 @@ class BatchTask {
       taskId: json['task_id'] as String,
       novelId: json['novel_id'] as String,
       voiceId: json['voice_id'] as String,
-      segmentStart: json['segment_start'] as int,
-      segmentEnd: json['segment_end'] as int,
+      utteranceStart: json['utterance_start'] as int? ?? json['segment_start'] as int,
+      utteranceEnd: json['utterance_end'] as int? ?? json['segment_end'] as int,
       currentIndex: json['current_index'] as int,
-      totalSegments: json['total_segments'] as int,
+      totalUtterances: json['total_utterances'] as int? ?? json['total_segments'] as int,
       status: BatchTaskStatus.fromString(json['status'] as String),
       progressPercent: (json['progress_percent'] as num).toDouble(),
       errorMessage: json['error_message'] as String?,
@@ -87,10 +87,10 @@ class BatchTask {
       'task_id': taskId,
       'novel_id': novelId,
       'voice_id': voiceId,
-      'segment_start': segmentStart,
-      'segment_end': segmentEnd,
+      'utterance_start': utteranceStart,
+      'utterance_end': utteranceEnd,
       'current_index': currentIndex,
-      'total_segments': totalSegments,
+      'total_utterances': totalUtterances,
       'status': status.toJson(),
       'progress_percent': progressPercent,
       'error_message': errorMessage,
@@ -101,10 +101,10 @@ class BatchTask {
     String? taskId,
     String? novelId,
     String? voiceId,
-    int? segmentStart,
-    int? segmentEnd,
+    int? utteranceStart,
+    int? utteranceEnd,
     int? currentIndex,
-    int? totalSegments,
+    int? totalUtterances,
     BatchTaskStatus? status,
     double? progressPercent,
     String? errorMessage,
@@ -113,10 +113,10 @@ class BatchTask {
       taskId: taskId ?? this.taskId,
       novelId: novelId ?? this.novelId,
       voiceId: voiceId ?? this.voiceId,
-      segmentStart: segmentStart ?? this.segmentStart,
-      segmentEnd: segmentEnd ?? this.segmentEnd,
+      utteranceStart: utteranceStart ?? this.utteranceStart,
+      utteranceEnd: utteranceEnd ?? this.utteranceEnd,
       currentIndex: currentIndex ?? this.currentIndex,
-      totalSegments: totalSegments ?? this.totalSegments,
+      totalUtterances: totalUtterances ?? this.totalUtterances,
       status: status ?? this.status,
       progressPercent: progressPercent ?? this.progressPercent,
       errorMessage: errorMessage ?? this.errorMessage,

@@ -113,6 +113,7 @@ class NovelBrief {
   final String status;
   final int totalUtterances;
   final String parsePhase;
+  final String? narrationVoiceId;
   final BriefCapabilities capabilities;
   final WorkerStatus worker;
   final AssignmentSummary summary;
@@ -124,6 +125,7 @@ class NovelBrief {
     this.status = '',
     this.totalUtterances = 0,
     this.parsePhase = '',
+    this.narrationVoiceId,
     this.capabilities = const BriefCapabilities(),
     this.worker = const WorkerStatus(),
     this.summary = const AssignmentSummary(),
@@ -137,6 +139,7 @@ class NovelBrief {
       status: json['status'] as String? ?? '',
       totalUtterances: json['total_utterances'] as int? ?? 0,
       parsePhase: json['parse_phase'] as String? ?? '',
+      narrationVoiceId: json['narration_voice_id'] as String?,
       capabilities: json['capabilities'] != null
           ? BriefCapabilities.fromJson(
               json['capabilities'] as Map<String, dynamic>)
@@ -153,6 +156,36 @@ class NovelBrief {
           [],
     );
   }
+
+  /// 复制并修改部分字段
+  NovelBrief copyWith({
+    String? id,
+    String? title,
+    String? status,
+    int? totalUtterances,
+    String? parsePhase,
+    String? narrationVoiceId,
+    BriefCapabilities? capabilities,
+    WorkerStatus? worker,
+    AssignmentSummary? summary,
+    List<SpeakerInfo>? speakers,
+  }) {
+    return NovelBrief(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      status: status ?? this.status,
+      totalUtterances: totalUtterances ?? this.totalUtterances,
+      parsePhase: parsePhase ?? this.parsePhase,
+      narrationVoiceId: narrationVoiceId ?? this.narrationVoiceId,
+      capabilities: capabilities ?? this.capabilities,
+      worker: worker ?? this.worker,
+      summary: summary ?? this.summary,
+      speakers: speakers ?? this.speakers,
+    );
+  }
+
+  /// 是否已设置旁白音色
+  bool get hasNarrationVoice => narrationVoiceId != null && narrationVoiceId!.isNotEmpty;
 
   /// 是否已解析完成（parse_phase=ready_for_assignment 或 worker.parseCompleted）
   bool get isParseCompleted =>

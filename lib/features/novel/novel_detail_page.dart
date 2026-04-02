@@ -58,7 +58,7 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
     );
   }
 
-  void _startPlayback({int startIndex = 0}) {
+  void _startPlayback({int startIndex = -1}) {
     final voiceState = ref.read(voiceListProvider);
     if (voiceState.voices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -67,17 +67,100 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
       return;
     }
 
+    // 使用 brief 的最新数据检查 utterances 数量
+    final brief = _brief;
+    if (brief == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('正在加载小说信息，请稍候...')),
+      );
+      return;
+    }
+
+    if (brief.totalUtterances == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('该小说暂无音频内容，请等待处理完成')),
+      );
+      // 刷新数据
+      _loadBrief();
+      return;
+    }
+
     // 检查是否有播放历史
     final history =
         ref.read(historyProvider.notifier).getLastPosition(widget.novel.id);
+
+    // 验证历史索引是否有效
+    // startIndex < 0 表示未指定，使用历史记录
+    final historyIndex = history?.utteranceIndex ?? 0;
+    final validIndex = startIndex < 0 ? historyIndex : startIndex;
+
+    if (validIndex >= brief.totalUtterances) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('播放位置无效（共 ${brief.totalUtterances} 段），将从头开始播放')),
+      );
+      _startPlayback(startIndex: 0);
+      return;
+    }
 
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => PlayerPage(
           novel: widget.novel,
-          startIndex: startIndex > 0 ? startIndex : (history?.segmentIndex ?? 0),
+          startIndex: validIndex,
         ),
       ),
+    );
+  }
+
+  Future<void> _setNarrationVoice() async {
+    final brief = _brief;
+    final voiceState = ref.read(voiceListProvider);
+
+    if (voiceState.voices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先添加音色')),
+      );
+      return;
+    }
+
+    final selectedVoice = await showModalBottomSheet<Voice>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => _VoicePickerSheet(
+        voices: voiceState.voices,
+        currentVoiceId: brief?.narrationVoiceId,
+      ),
+    );
+
+    if (selectedVoice == null || !mounted) return;
+
+    // 调用 API 设置旁白音色
+    final api = ref.read(apiServiceProvider);
+    final result = await api.setNarrationVoice(
+      widget.novel.id,
+      selectedVoice.id,
+    );
+
+    if (!mounted) return;
+
+    result.fold(
+      (error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('设置旁白音色失败: $error')),
+        );
+      },
+      (_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已设置旁白音色「${selectedVoice.name}」'),
+          ),
+        );
+        // 刷新 brief 数据
+        _loadBrief();
+      },
     );
   }
 
@@ -226,11 +309,23 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
             ),
         ],
       ),
-      // 底部播放按钮 —— 仅在小说状态为 ready 时显示
-      bottomNavigationBar: widget.novel.canPlay
+      // 底部播放按钮 —— 使用 brief 的最新数据判断
+      bottomNavigationBar: _shouldShowPlayBar()
           ? _buildBottomBar(history)
           : null,
     );
+  }
+
+  /// 判断是否应该显示底部播放栏
+  bool _shouldShowPlayBar() {
+    // 必须加载完成 brief 且无错误
+    if (_brief == null || _error != null) return false;
+
+    // 小说状态必须是 ready
+    if (widget.novel.status != NovelStatus.ready) return false;
+
+    // 必须有 utterances
+    return _brief!.totalUtterances > 0;
   }
 
   Widget _buildErrorView() {
@@ -280,6 +375,11 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
             brief: brief,
             history: history,
           ),
+
+          const SizedBox(height: 16),
+
+          // 旁白音色卡片
+          _buildNarrationVoiceCard(brief),
 
           const SizedBox(height: 24),
 
@@ -335,6 +435,140 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
 
           // 底部留白（给底部按钮让位）
           const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  /// 旁白音色卡片
+  Widget _buildNarrationVoiceCard(NovelBrief brief) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final voiceState = ref.watch(voiceListProvider);
+    final narrationVoiceId = brief.narrationVoiceId;
+    final narrationVoice = narrationVoiceId != null
+        ? voiceState.voices.where((v) => v.id == narrationVoiceId).firstOrNull
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.menu_book_outlined,
+                size: 20,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '旁白音色',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const Spacer(),
+              if (narrationVoice != null)
+                TextButton.icon(
+                  onPressed: _setNarrationVoice,
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('更换'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: _setNarrationVoice,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('设置'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (narrationVoice != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: colorScheme.primaryContainer,
+                    child: Icon(
+                      Icons.record_voice_over,
+                      size: 18,
+                      color: colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          narrationVoice.name,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                        if (narrationVoice.description != null)
+                          Text(
+                            narrationVoice.description!,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.check_circle, color: colorScheme.primary, size: 20),
+                ],
+              ),
+            ),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 20,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '用于旁白部分（叙述文本）的默认配音',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -517,7 +751,7 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
                         ),
                   ),
                   Text(
-                    '第 ${history.segmentIndex + 1} 段 / 共 ${widget.novel.totalSegments} 段',
+                    '第 ${history.utteranceIndex + 1} 段 / 共 ${widget.novel.totalUtterances} 段',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w500,
                         ),
@@ -538,7 +772,7 @@ class _NovelDetailPageState extends ConsumerState<NovelDetailPage> {
             const SizedBox(width: 8),
             // 继续播放按钮
             FilledButton.icon(
-              onPressed: () => _startPlayback(startIndex: history.segmentIndex),
+              onPressed: () => _startPlayback(startIndex: history.utteranceIndex),
               icon: const Icon(Icons.play_arrow),
               label: const Text('继续播放'),
               style: FilledButton.styleFrom(

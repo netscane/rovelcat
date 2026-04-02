@@ -32,7 +32,7 @@ enum NovelStatus {
 class Novel {
   final String id;
   final String title;
-  final int totalSegments;
+  final int totalUtterances;
   final NovelStatus status;
   final String createdAt;
   final bool isTemporary;
@@ -41,7 +41,7 @@ class Novel {
   const Novel({
     required this.id,
     required this.title,
-    this.totalSegments = 0,
+    this.totalUtterances = 0,
     this.status = NovelStatus.ready,
     this.createdAt = '',
     this.isTemporary = false,
@@ -52,7 +52,7 @@ class Novel {
     return Novel(
       id: json['id'] as String,
       title: json['title'] as String,
-      totalSegments: json['total_utterances'] as int?
+      totalUtterances: json['total_utterances'] as int?
           ?? json['total_segments'] as int?
           ?? 0,
       status: NovelStatus.fromString(json['status'] as String? ?? 'ready'),
@@ -66,7 +66,7 @@ class Novel {
     return {
       'id': id,
       'title': title,
-      'total_segments': totalSegments,
+      'total_utterances': totalUtterances,
       'status': status.toJson(),
       'created_at': createdAt,
       'is_temporary': isTemporary,
@@ -78,7 +78,7 @@ class Novel {
     return Novel(
       id: const Uuid().v4(),
       title: title,
-      totalSegments: 0,
+      totalUtterances: 0,
       status: NovelStatus.uploading,
       createdAt: DateTime.now().toIso8601String(),
       isTemporary: true,
@@ -88,7 +88,7 @@ class Novel {
   Novel copyWith({
     String? id,
     String? title,
-    int? totalSegments,
+    int? totalUtterances,
     NovelStatus? status,
     String? createdAt,
     bool? isTemporary,
@@ -97,7 +97,7 @@ class Novel {
     return Novel(
       id: id ?? this.id,
       title: title ?? this.title,
-      totalSegments: totalSegments ?? this.totalSegments,
+      totalUtterances: totalUtterances ?? this.totalUtterances,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       isTemporary: isTemporary ?? this.isTemporary,
@@ -106,7 +106,7 @@ class Novel {
   }
 
   /// 是否可以播放
-  bool get canPlay => status == NovelStatus.ready;
+  bool get canPlay => status == NovelStatus.ready && totalUtterances > 0;
 
   /// 格式化创建日期
   String get formattedDate {

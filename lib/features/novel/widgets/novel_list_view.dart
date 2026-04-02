@@ -44,7 +44,7 @@ class _NovelListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isReady = novel.canPlay;
+    final isProcessing = novel.status != NovelStatus.ready && novel.status != NovelStatus.error;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -59,7 +59,7 @@ class _NovelListItem extends StatelessWidget {
           ),
         ),
         child: InkWell(
-          onTap: isReady ? onTap : null,
+          onTap: onTap,
           onLongPress: onLongPress,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
@@ -120,7 +120,7 @@ class _NovelListItem extends StatelessWidget {
                         children: [
                           _InfoChip(
                             icon: Icons.library_books_outlined,
-                            label: '${novel.totalSegments} 段',
+                            label: '${novel.totalUtterances} 段',
                             colorScheme: colorScheme,
                           ),
                           const SizedBox(width: 8),
@@ -135,7 +135,7 @@ class _NovelListItem extends StatelessWidget {
                   ),
                 ),
                 // 状态指示器
-                if (!isReady)
+                if (isProcessing)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -163,6 +163,11 @@ class _NovelListItem extends StatelessWidget {
                         ),
                       ],
                     ),
+                  )
+                else if (novel.status == NovelStatus.error)
+                  Icon(
+                    Icons.error_outline,
+                    color: colorScheme.error,
                   )
                 else
                   Icon(

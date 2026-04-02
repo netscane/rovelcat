@@ -64,19 +64,19 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
     required String novelId,
     required String novelTitle,
     String? coverUrl,
-    required int segmentIndex,
+    required int utteranceIndex,
     required String voiceId,
     required String voiceName,
-    required int totalSegments,
+    required int totalUtterances,
   }) async {
     final history = PlayHistory(
       novelId: novelId,
       novelTitle: novelTitle,
       coverUrl: coverUrl,
-      segmentIndex: segmentIndex,
+      utteranceIndex: utteranceIndex,
       voiceId: voiceId,
       voiceName: voiceName,
-      totalSegments: totalSegments,
+      totalUtterances: totalUtterances,
       playedAt: DateTime.now(),
     );
 

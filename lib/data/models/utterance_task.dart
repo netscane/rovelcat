@@ -1,4 +1,3 @@
-/// 任务状态枚举
 enum TaskState {
   pending,
   inferring,
@@ -26,21 +25,20 @@ enum TaskState {
   String toJson() => name;
 }
 
-/// 段落任务数据模型
-class SegmentTask {
+class UtteranceTask {
   final String sessionId;
   final String taskId;
-  final int segmentIndex;
+  final int utteranceIndex;
   final TaskState state;
   final int? durationMs;
   final String? error;
   final DateTime createdAt;
   final int version;
 
-  const SegmentTask({
+  const UtteranceTask({
     required this.sessionId,
     this.taskId = '',
-    required this.segmentIndex,
+    required this.utteranceIndex,
     this.state = TaskState.pending,
     this.durationMs,
     this.error,
@@ -48,20 +46,20 @@ class SegmentTask {
     this.version = 0,
   });
 
-  SegmentTask copyWith({
+  UtteranceTask copyWith({
     String? sessionId,
     String? taskId,
-    int? segmentIndex,
+    int? utteranceIndex,
     TaskState? state,
     int? durationMs,
     String? error,
     DateTime? createdAt,
     int? version,
   }) {
-    return SegmentTask(
+    return UtteranceTask(
       sessionId: sessionId ?? this.sessionId,
       taskId: taskId ?? this.taskId,
-      segmentIndex: segmentIndex ?? this.segmentIndex,
+      utteranceIndex: utteranceIndex ?? this.utteranceIndex,
       state: state ?? this.state,
       durationMs: durationMs ?? this.durationMs,
       error: error ?? this.error,
@@ -71,10 +69,9 @@ class SegmentTask {
   }
 }
 
-/// 任务信息（API 返回）
 class TaskInfo {
   final String taskId;
-  final int segmentIndex;
+  final int utteranceIndex;
   final String state;
   final String? cacheKey;
   final int? durationMs;
@@ -82,7 +79,7 @@ class TaskInfo {
 
   const TaskInfo({
     required this.taskId,
-    this.segmentIndex = -1,
+    this.utteranceIndex = -1,
     required this.state,
     this.cacheKey,
     this.durationMs,
@@ -92,7 +89,7 @@ class TaskInfo {
   factory TaskInfo.fromJson(Map<String, dynamic> json) {
     return TaskInfo(
       taskId: json['task_id'] as String? ?? json['id'] as String? ?? '',
-      segmentIndex: json['segment_index'] as int? ?? json['index'] as int? ?? -1,
+      utteranceIndex: json['utterance_index'] as int? ?? json['segment_index'] as int? ?? json['index'] as int? ?? -1,
       state: json['state'] as String? ?? json['status'] as String? ?? 'pending',
       cacheKey: json['cache_key'] as String?,
       durationMs: json['duration_ms'] as int?,

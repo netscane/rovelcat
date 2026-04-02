@@ -57,7 +57,12 @@ class _NovelPageState extends ConsumerState<NovelPage> {
       MaterialPageRoute(
         builder: (context) => NovelDetailPage(novel: novel),
       ),
-    );
+    ).then((_) {
+      // 返回时刷新小说列表，确保数据是最新的
+      if (mounted) {
+        ref.read(novelListProvider.notifier).refresh();
+      }
+    });
   }
 
   Future<void> _deleteNovel(Novel novel) async {

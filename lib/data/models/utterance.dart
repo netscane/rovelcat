@@ -1,12 +1,11 @@
-/// 段落数据模型
-class Segment {
+class Utterance {
   final int index;
   final String content;
   final int charCount;
   final String? speaker;
   final String? voiceId;
 
-  const Segment({
+  const Utterance({
     required this.index,
     required this.content,
     this.charCount = 0,
@@ -14,8 +13,8 @@ class Segment {
     this.voiceId,
   });
 
-  factory Segment.fromJson(Map<String, dynamic> json) {
-    return Segment(
+  factory Utterance.fromJson(Map<String, dynamic> json) {
+    return Utterance(
       index: json['index'] as int,
       content: json['content'] as String? ?? json['text'] as String? ?? '',
       charCount: json['char_count'] as int? ?? 0,
@@ -35,25 +34,23 @@ class Segment {
   }
 }
 
-/// 段落列表响应
-class SegmentsResponse {
-  final List<Segment> segments;
+class UtterancesResponse {
+  final List<Utterance> utterances;
   final int total;
 
-  const SegmentsResponse({
-    required this.segments,
+  const UtterancesResponse({
+    required this.utterances,
     required this.total,
   });
 
-  factory SegmentsResponse.fromJson(Map<String, dynamic> json) {
-    // 支持新字段名 'utterances' 和旧字段名 'segments'
+  factory UtterancesResponse.fromJson(Map<String, dynamic> json) {
     final rawList = json['utterances'] as List? ?? json['segments'] as List? ?? [];
-    final segmentsList = rawList
-        .map((e) => Segment.fromJson(e as Map<String, dynamic>))
+    final utterancesList = rawList
+        .map((e) => Utterance.fromJson(e as Map<String, dynamic>))
         .toList();
-    return SegmentsResponse(
-      segments: segmentsList,
-      total: json['total'] as int? ?? segmentsList.length,
+    return UtterancesResponse(
+      utterances: utterancesList,
+      total: json['total'] as int? ?? utterancesList.length,
     );
   }
 }

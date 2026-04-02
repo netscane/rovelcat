@@ -101,7 +101,7 @@ class HistoryListDialog extends ConsumerWidget {
       MaterialPageRoute(
         builder: (context) => PlayerPage(
           novel: novel,
-          startIndex: history.segmentIndex,
+          startIndex: history.utteranceIndex,
         ),
       ),
     );
@@ -185,8 +185,8 @@ class _HistoryItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final progress = history.totalSegments > 0
-        ? history.segmentIndex / history.totalSegments
+    final progress = history.totalUtterances > 0
+        ? history.utteranceIndex / history.totalUtterances
         : 0.0;
 
     return Dismissible(
@@ -257,7 +257,7 @@ class _HistoryItem extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  '${history.segmentIndex + 1}/${history.totalSegments}段',
+                  '${history.utteranceIndex + 1}/${history.totalUtterances}段',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),

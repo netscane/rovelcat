@@ -234,7 +234,7 @@ class _BatchTaskItem extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '第 ${task.segmentStart + 1} - ${task.segmentEnd + 1} 段',
+                        '第 ${task.utteranceStart + 1} - ${task.utteranceEnd + 1} 段',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -256,7 +256,7 @@ class _BatchTaskItem extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '已处理 ${task.currentIndex - task.segmentStart} / ${task.totalSegments} 段',
+                    '已处理 ${task.currentIndex - task.utteranceStart} / ${task.totalUtterances} 段',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),

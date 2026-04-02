@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/settings_provider.dart';
 import '../models/novel.dart';
 import '../models/voice.dart';
-import '../models/segment.dart';
+import '../models/utterance.dart';
 import '../models/play_session.dart';
-import '../models/segment_task.dart';
+import '../models/utterance_task.dart';
 import '../models/batch_task.dart';
 import '../models/novel_brief.dart';
 
@@ -78,7 +78,32 @@ class ApiService {
           baseUrl: baseUrl,
           connectTimeout: const Duration(seconds: 60),
           receiveTimeout: const Duration(seconds: 60),
-        ));
+        )) {
+    _addLoggingInterceptor();
+  }
+
+  void _addLoggingInterceptor() {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          debugPrint('DIO: ${options.method} ${options.uri}');
+          debugPrint('DIO: Request data: ${options.data}');
+          debugPrint('DIO: Request headers: ${options.headers}');
+          return handler.next(options);
+        },
+        onResponse: (response, handler) {
+          debugPrint('DIO: Response ${response.statusCode} ${response.statusMessage}');
+          debugPrint('DIO: Response data: ${response.data}');
+          return handler.next(response);
+        },
+        onError: (error, handler) {
+          debugPrint('DIO: Error ${error.response?.statusCode}: ${error.message}');
+          debugPrint('DIO: Error response: ${error.response?.data}');
+          return handler.next(error);
+        },
+      ),
+    );
+  }
 
   void updateBaseUrl(String baseUrl) {
     _baseUrl = baseUrl;
@@ -87,6 +112,7 @@ class ApiService {
       connectTimeout: const Duration(seconds: 60),
       receiveTimeout: const Duration(seconds: 60),
     ));
+    _addLoggingInterceptor();
   }
 
   String get baseUrl => _baseUrl;
@@ -135,8 +161,7 @@ class ApiService {
     return Result.success(apiResp.data!);
   }
 
-  /// 获取小说段落（utterances）
-  Future<Result<SegmentsResponse>> getUtterances(
+  Future<Result<UtterancesResponse>> getUtterances(
     String novelId, {
     int? start,
     int? limit,
@@ -146,9 +171,9 @@ class ApiService {
       if (start != null) 'start': start,
       if (limit != null) 'limit': limit,
     });
-    final apiResp = ApiResponse<SegmentsResponse>.fromJson(
+    final apiResp = ApiResponse<UtterancesResponse>.fromJson(
       response.data,
-      (data) => SegmentsResponse.fromJson(data as Map<String, dynamic>),
+      (data) => UtterancesResponse.fromJson(data as Map<String, dynamic>),
     );
     if (!apiResp.isSuccess) {
       return Result.failure(_errorMsg(apiResp));
@@ -156,8 +181,7 @@ class ApiService {
     return Result.success(apiResp.data!);
   }
 
-  /// 获取小说段落（兼容旧接口名）
-  Future<Result<SegmentsResponse>> getSegments(
+  Future<Result<UtterancesResponse>> getSegments(
     String novelId, {
     int? start,
     int? limit,
@@ -176,6 +200,26 @@ class ApiService {
       return Result.failure(_errorMsg(apiResp));
     }
     return Result.success(apiResp.data!);
+  }
+
+  /// 设置小说旁白音色
+  /// 用于为叙述部分（kind=narration）指定默认配音
+  Future<Result<void>> setNarrationVoice(
+    String novelId,
+    String voiceId,
+  ) async {
+    debugPrint('ApiService: setNarrationVoice(novelId=$novelId, voiceId=$voiceId)');
+    final response = await _dio.post('/novel/set-narration-voice', data: {
+      'novel_id': novelId,
+      'voice_id': voiceId,
+    });
+    final apiResp = ApiResponse.fromJson(response.data, null);
+    if (!apiResp.isSuccess) {
+      debugPrint('ApiService: setNarrationVoice failed: ${apiResp.error}');
+      return Result.failure(_errorMsg(apiResp));
+    }
+    debugPrint('ApiService: setNarrationVoice success');
+    return Result.success(null);
   }
 
   Future<Result<Novel>> uploadNovel(
@@ -275,16 +319,17 @@ class ApiService {
   }
 
   /// 获取音色标签选项
-  Future<Result<Map<String, dynamic>>> getVoiceTagOptions() async {
+  /// Returns a list of available tag strings (e.g., ["male", "female", "young", "old", ...])
+  Future<Result<List<String>>> getVoiceTagOptions() async {
     final response = await _dio.get('/voice/tags/options');
-    final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
+    final apiResp = ApiResponse<List<String>>.fromJson(
       response.data,
-      (data) => data as Map<String, dynamic>,
+      (data) => (data as List).map((e) => e as String).toList(),
     );
     if (!apiResp.isSuccess) {
       return Result.failure(_errorMsg(apiResp));
     }
-    return Result.success(apiResp.data!);
+    return Result.success(apiResp.data ?? []);
   }
 
   /// 下载音色参考音频
@@ -323,12 +368,12 @@ class ApiService {
     return Result.success(apiResp.data!);
   }
 
-  Future<Result<int>> seek(String sessionId, int segmentIndex) async {
-    debugPrint('ApiService.seek(): session_id=$sessionId, segment_index=$segmentIndex');
+  Future<Result<int>> seek(String sessionId, int utteranceIndex) async {
+    debugPrint('ApiService.seek(): session_id=$sessionId, utterance_index=$utteranceIndex');
     try {
       final response = await _dio.post('/session/seek', data: {
         'session_id': sessionId,
-        'segment_index': segmentIndex,
+        'utterance_index': utteranceIndex,
       });
       debugPrint('ApiService.seek() response: ${response.data}');
       final apiResp = ApiResponse<int>.fromJson(
@@ -379,10 +424,15 @@ class ApiService {
     String sessionId,
     List<int> utteranceIndices,
   ) async {
-    final response = await _dio.post('/infer/submit', data: {
+    final requestData = {
       'session_id': sessionId,
       'utterance_indices': utteranceIndices,
-    });
+    };
+    debugPrint('API: submitInfer request: $requestData');
+
+    final response = await _dio.post('/infer/submit', data: requestData);
+    debugPrint('API: submitInfer response: ${response.data}');
+
     final apiResp = ApiResponse<List<TaskInfo>>.fromJson(
       response.data,
       (data) {
@@ -397,8 +447,10 @@ class ApiService {
       },
     );
     if (!apiResp.isSuccess) {
+      debugPrint('API: submitInfer failed: ${apiResp.error}');
       return Result.failure(_errorMsg(apiResp));
     }
+    debugPrint('API: submitInfer success: ${apiResp.data?.length} tasks');
     return Result.success(apiResp.data ?? []);
   }
 
@@ -430,6 +482,7 @@ class ApiService {
 
   /// 通过 cache key 获取音频
   Future<Uint8List?> getAudio(Map<String, dynamic> params) async {
+    debugPrint('API: getAudio request: $params');
     final response = await _dio.post(
       '/audio',
       data: params,
@@ -439,21 +492,22 @@ class ApiService {
     // 检查响应是否是 JSON（错误）还是二进制（音频）
     if (response.headers['content-type']?.first.contains('application/json') ??
         false) {
+      debugPrint('API: getAudio returned JSON (error): ${response.data}');
       return null;
     }
 
+    debugPrint('API: getAudio success: ${response.data?.length} bytes');
     return response.data as Uint8List;
   }
 
-  /// 便捷方法：通过 novel_id + segment_index + voice_id 获取音频
-  Future<Uint8List?> getSegmentAudio(
+  Future<Uint8List?> getUtteranceAudio(
     String novelId,
-    int segmentIndex,
+    int utteranceIndex,
     String voiceId,
   ) async {
     return getAudio({
       'novel_id': novelId,
-      'segment_index': segmentIndex,
+      'utterance_index': utteranceIndex,
       'voice_id': voiceId,
     });
   }
@@ -590,18 +644,17 @@ class ApiService {
 
   // ========== Batch Task APIs ==========
 
-  /// 创建批量推理任务
   Future<Result<BatchTask>> createBatchTask(
     String novelId,
     String voiceId, {
-    int segmentStart = 0,
-    int? segmentEnd,
+    int utteranceStart = 0,
+    int? utteranceEnd,
   }) async {
     final response = await _dio.post('/batch', data: {
       'novel_id': novelId,
       'voice_id': voiceId,
-      'segment_start': segmentStart,
-      if (segmentEnd != null) 'segment_end': segmentEnd,
+      'utterance_start': utteranceStart,
+      if (utteranceEnd != null) 'utterance_end': utteranceEnd,
     });
     final apiResp = ApiResponse<BatchTask>.fromJson(
       response.data,

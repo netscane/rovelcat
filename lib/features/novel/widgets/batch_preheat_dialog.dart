@@ -24,7 +24,7 @@ class _BatchPreheatDialogState extends ConsumerState<BatchPreheatDialog> {
   @override
   void initState() {
     super.initState();
-    _segmentRange = RangeValues(0, (widget.novel.totalSegments - 1).toDouble());
+    _segmentRange = RangeValues(0, (widget.novel.totalUtterances - 1).toDouble());
   }
 
   int get _segmentStart => _segmentRange.start.round();
@@ -45,8 +45,8 @@ class _BatchPreheatDialogState extends ConsumerState<BatchPreheatDialog> {
     final error = await ref.read(batchTaskListProvider.notifier).createTask(
       widget.novel.id,
       _selectedVoice!.id,
-      segmentStart: _segmentStart,
-      segmentEnd: _segmentEnd,
+      utteranceStart: _segmentStart,
+      utteranceEnd: _segmentEnd,
     );
 
     if (!mounted) return;
@@ -179,16 +179,16 @@ class _BatchPreheatDialogState extends ConsumerState<BatchPreheatDialog> {
                     RangeSlider(
                       values: _segmentRange,
                       min: 0,
-                      max: (widget.novel.totalSegments - 1).toDouble(),
-                      divisions: widget.novel.totalSegments > 1
-                          ? widget.novel.totalSegments - 1
+                      max: (widget.novel.totalUtterances - 1).toDouble(),
+                      divisions: widget.novel.totalUtterances > 1
+                          ? widget.novel.totalUtterances - 1
                           : 1,
                       onChanged: _isSubmitting
                           ? null
                           : (values) => setState(() => _segmentRange = values),
                     ),
                     Text(
-                      '共 $_totalSelected 段（总计 ${widget.novel.totalSegments} 段）',
+                      '共 $_totalSelected 段（总计 ${widget.novel.totalUtterances} 段）',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),

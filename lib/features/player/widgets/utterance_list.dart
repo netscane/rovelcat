@@ -1,66 +1,66 @@
 import 'package:flutter/material.dart';
-import '../../../data/models/segment.dart';
-import '../../../data/models/segment_task.dart';
+import '../../../data/models/utterance.dart';
+import '../../../data/models/utterance_task.dart';
 
 /// 段落列表组件
-class SegmentList extends StatefulWidget {
-  final List<Segment> segments;
+class UtteranceList extends StatefulWidget {
+  final List<Utterance> utterances;
   final int currentIndex;
   final int loadedStart;
-  final Map<int, SegmentTask> tasks;
+  final Map<int, UtteranceTask> tasks;
   final bool hasMore;
   final bool loadingMore;
   final ScrollController scrollController;
-  final Function(int) onSegmentTap;
+  final Function(int) onUtteranceTap;
   final int? scrollToIndex;
   final VoidCallback? onScrollCompleted;
 
-  const SegmentList({
+  const UtteranceList({
     super.key,
-    required this.segments,
+    required this.utterances,
     required this.currentIndex,
     required this.loadedStart,
     required this.tasks,
     required this.hasMore,
     required this.loadingMore,
     required this.scrollController,
-    required this.onSegmentTap,
+    required this.onUtteranceTap,
     this.scrollToIndex,
     this.onScrollCompleted,
   });
 
   @override
-  State<SegmentList> createState() => _SegmentListState();
+  State<UtteranceList> createState() => _UtteranceListState();
 }
 
-class _SegmentListState extends State<SegmentList> {
+class _UtteranceListState extends State<UtteranceList> {
   final Map<int, GlobalKey> _itemKeys = {};
   int? _lastScrolledToIndex;
 
-  GlobalKey _getKeyForIndex(int segmentIndex) {
-    return _itemKeys.putIfAbsent(segmentIndex, () => GlobalKey());
+  GlobalKey _getKeyForIndex(int utteranceIndex) {
+    return _itemKeys.putIfAbsent(utteranceIndex, () => GlobalKey());
   }
 
   @override
-  void didUpdateWidget(SegmentList oldWidget) {
+  void didUpdateWidget(UtteranceList oldWidget) {
     super.didUpdateWidget(oldWidget);
     // 当 scrollToIndex 改变时触发滚动
-    if (widget.scrollToIndex != null && 
+    if (widget.scrollToIndex != null &&
         widget.scrollToIndex != _lastScrolledToIndex) {
       _lastScrolledToIndex = widget.scrollToIndex;
       // 尝试立即滚动，如果目标尚未渲染则延迟到下一帧
-      if (!_scrollToSegment(widget.scrollToIndex!)) {
+      if (!_scrollToUtterance(widget.scrollToIndex!)) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToSegment(widget.scrollToIndex!);
+          _scrollToUtterance(widget.scrollToIndex!);
         });
       }
     }
   }
 
-  bool _scrollToSegment(int segmentIndex) {
-    final key = _itemKeys[segmentIndex];
+  bool _scrollToUtterance(int utteranceIndex) {
+    final key = _itemKeys[utteranceIndex];
     if (key?.currentContext == null) return false;
-    
+
     Scrollable.ensureVisible(
       key!.currentContext!,
       duration: const Duration(milliseconds: 300),
@@ -77,22 +77,22 @@ class _SegmentListState extends State<SegmentList> {
     return ListView.builder(
       controller: widget.scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: widget.segments.length + (widget.hasMore ? 1 : 0),
+      itemCount: widget.utterances.length + (widget.hasMore ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index >= widget.segments.length) {
+        if (index >= widget.utterances.length) {
           return _buildLoadingIndicator(context);
         }
-        
-        final segment = widget.segments[index];
-        final isPlaying = segment.index == widget.currentIndex;
-        final task = widget.tasks[segment.index];
-        
-        return _SegmentItem(
-          key: _getKeyForIndex(segment.index),
-          segment: segment,
+
+        final utterance = widget.utterances[index];
+        final isPlaying = utterance.index == widget.currentIndex;
+        final task = widget.tasks[utterance.index];
+
+        return _UtteranceItem(
+          key: _getKeyForIndex(utterance.index),
+          utterance: utterance,
           isPlaying: isPlaying,
           task: task,
-          onTap: () => widget.onSegmentTap(segment.index),
+          onTap: () => widget.onUtteranceTap(utterance.index),
         );
       },
     );
@@ -136,15 +136,15 @@ class _SegmentListState extends State<SegmentList> {
   }
 }
 
-class _SegmentItem extends StatelessWidget {
-  final Segment segment;
+class _UtteranceItem extends StatelessWidget {
+  final Utterance utterance;
   final bool isPlaying;
-  final SegmentTask? task;
+  final UtteranceTask? task;
   final VoidCallback onTap;
 
-  const _SegmentItem({
+  const _UtteranceItem({
     super.key,
-    required this.segment,
+    required this.utterance,
     required this.isPlaying,
     this.task,
     required this.onTap,
@@ -196,7 +196,7 @@ class _SegmentItem extends StatelessWidget {
                       : FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            '${segment.index + 1}',
+                            '${utterance.index + 1}',
                             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                   fontWeight: FontWeight.w600,
@@ -212,7 +212,7 @@ class _SegmentItem extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        segment.content,
+                        utterance.content,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: isPlaying
                                   ? colorScheme.onPrimaryContainer
@@ -237,7 +237,7 @@ class _SegmentItem extends StatelessWidget {
 }
 
 class _TaskStatusIndicator extends StatelessWidget {
-  final SegmentTask task;
+  final UtteranceTask task;
 
   const _TaskStatusIndicator({required this.task});
 

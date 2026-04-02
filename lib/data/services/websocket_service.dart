@@ -16,7 +16,7 @@ abstract class WsEvent {}
 class TaskStateChangedEvent extends WsEvent {
   final String sessionId;
   final String taskId;
-  final int segmentIndex;
+  final int utteranceIndex;
   final String state;
   final int? durationMs;
   final String? error;
@@ -24,7 +24,7 @@ class TaskStateChangedEvent extends WsEvent {
   TaskStateChangedEvent({
     required this.sessionId,
     required this.taskId,
-    required this.segmentIndex,
+    required this.utteranceIndex,
     required this.state,
     this.durationMs,
     this.error,
@@ -34,7 +34,7 @@ class TaskStateChangedEvent extends WsEvent {
     return TaskStateChangedEvent(
       sessionId: json['session_id'] as String,
       taskId: json['task_id'] as String,
-      segmentIndex: json['segment_index'] as int,
+      utteranceIndex: json['utterance_index'] as int,
       state: json['state'] as String,
       durationMs: json['duration_ms'] as int?,
       error: json['error'] as String?,
@@ -61,19 +61,19 @@ class SessionClosedEvent extends WsEvent {
 class NovelReadyEvent extends WsEvent {
   final String novelId;
   final String title;
-  final int totalSegments;
+  final int totalUtterances;
 
   NovelReadyEvent({
     required this.novelId,
     required this.title,
-    required this.totalSegments,
+    required this.totalUtterances,
   });
 
   factory NovelReadyEvent.fromJson(Map<String, dynamic> json) {
     return NovelReadyEvent(
       novelId: json['novel_id'] as String,
       title: json['title'] as String,
-      totalSegments: json['total_segments'] as int,
+      totalUtterances: json['total_utterances'] as int,
     );
   }
 }

@@ -152,7 +152,7 @@ class NovelInfoHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '上次听到第 ${history!.segmentIndex + 1} 段',
+                    '上次听到第 ${history!.utteranceIndex + 1} 段',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),

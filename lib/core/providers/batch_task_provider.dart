@@ -92,14 +92,14 @@ class BatchTaskListNotifier extends StateNotifier<BatchTaskListState> {
   Future<String?> createTask(
     String novelId,
     String voiceId, {
-    int segmentStart = 0,
-    int? segmentEnd,
+    int utteranceStart = 0,
+    int? utteranceEnd,
   }) async {
     final result = await _api.createBatchTask(
       novelId,
       voiceId,
-      segmentStart: segmentStart,
-      segmentEnd: segmentEnd,
+      utteranceStart: utteranceStart,
+      utteranceEnd: utteranceEnd,
     );
     return result.fold(
       (error) => error,
