@@ -3,7 +3,7 @@ import '../../../data/models/novel.dart';
 import '../../../data/models/novel_brief.dart';
 import '../../../data/models/play_history.dart';
 
-/// 小说详情信息头部卡片
+/// 小说详情信息头部卡片 - 现代化设计
 class NovelInfoHeader extends StatelessWidget {
   final Novel novel;
   final NovelBrief brief;
@@ -20,185 +20,102 @@ class NovelInfoHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 统计数据行 - 3 个独立卡片
+        Row(
           children: [
-            // 统计数据行
-            Row(
-              children: [
-                Expanded(
-                  child: _StatItem(
-                    icon: Icons.format_list_numbered,
-                    label: '总段落',
-                    value: '${brief.totalUtterances}',
-                    color: colorScheme.primary,
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                ),
-                Expanded(
-                  child: _StatItem(
-                    icon: Icons.people_outline,
-                    label: '角色',
-                    value: '${brief.speakerCount}',
-                    color: colorScheme.tertiary,
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                ),
-                Expanded(
-                  child: _StatItem(
-                    icon: Icons.record_voice_over,
-                    label: '已配音',
-                    value: '${brief.assignedSpeakerCount}',
-                    color: colorScheme.secondary,
-                  ),
-                ),
-              ],
+            Expanded(
+              child: _StatCard(
+                icon: Icons.format_list_numbered_rounded,
+                label: '总段落',
+                value: '${brief.totalUtterances}',
+                color: colorScheme.primary,
+                bgColor: colorScheme.primaryContainer,
+              ),
             ),
-
-            // 解析状态
-            if (!brief.isParseCompleted) ...[
-              const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _parsePhaseLabel(brief),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.primary,
-                        ),
-                  ),
-                  const Spacer(),
-                  if (brief.worker.totalCharacters > 0)
-                    Text(
-                      '已发现 ${brief.worker.totalCharacters} 个角色',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.people_rounded,
+                label: '角色',
+                value: '${brief.speakerCount}',
+                color: colorScheme.tertiary,
+                bgColor: colorScheme.tertiaryContainer,
               ),
-            ] else ...[
-              // 解析完成标记
-              const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(
-                    Icons.check_circle_outline,
-                    size: 16,
-                    color: colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '角色解析完成',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.primary,
-                        ),
-                  ),
-                  if (brief.canAssignVoice) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      '· 可分配音色',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ],
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.record_voice_over_rounded,
+                label: '已配音',
+                value: '${brief.assignedSpeakerCount}',
+                color: colorScheme.secondary,
+                bgColor: colorScheme.secondaryContainer,
               ),
-            ],
-
-            // 上次播放记录
-            if (history != null) ...[
-              const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(
-                    Icons.history,
-                    size: 16,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '上次听到第 ${history!.utteranceIndex + 1} 段',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  if (history!.voiceName.isNotEmpty) ...[
-                    const SizedBox(width: 12),
-                    Icon(
-                      Icons.record_voice_over,
-                      size: 14,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '使用「${history!.voiceName}」',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-
-            // 创建日期
-            const SizedBox(height: 12),
-            const Divider(),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_today,
-                  size: 14,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '创建于 ${novel.formattedDate}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
             ),
           ],
         ),
-      ),
+
+        const SizedBox(height: 16),
+
+        // 状态信息区
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Column(
+            children: [
+              // 解析状态
+              _InfoRow(
+                icon: brief.isParseCompleted
+                    ? Icons.check_circle_rounded
+                    : Icons.autorenew_rounded,
+                iconColor: brief.isParseCompleted
+                    ? Colors.green
+                    : colorScheme.primary,
+                text: brief.isParseCompleted
+                    ? '角色解析完成${brief.canAssignVoice ? ' · 可分配音色' : ''}'
+                    : _parsePhaseLabel(brief),
+                spinning: !brief.isParseCompleted,
+              ),
+
+              // 上次播放记录
+              if (history != null) ...[
+                Divider(
+                  height: 20,
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.2),
+                ),
+                _InfoRow(
+                  icon: Icons.history_rounded,
+                  iconColor: colorScheme.onSurfaceVariant,
+                  text: '上次听到第 ${history!.utteranceIndex + 1} 段'
+                      '${history!.voiceName.isNotEmpty ? ' · ${history!.voiceName}' : ''}',
+                ),
+              ],
+
+              // 创建日期
+              if (novel.formattedDate.isNotEmpty) ...[
+                Divider(
+                  height: 20,
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.2),
+                ),
+                _InfoRow(
+                  icon: Icons.calendar_today_rounded,
+                  iconColor: colorScheme.onSurfaceVariant,
+                  text: '创建于 ${novel.formattedDate}',
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -218,45 +135,112 @@ class NovelInfoHeader extends StatelessWidget {
         return '角色解析完成';
       default:
         if (brief.worker.newCharacters > 0) {
-          return '角色解析中...';
+          return '角色解析中... 已发现 ${brief.worker.totalCharacters} 个角色';
         }
         return '解析中...';
     }
   }
 }
 
-class _StatItem extends StatelessWidget {
+/// 统计数据卡片
+class _StatCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
   final Color color;
+  final Color bgColor;
 
-  const _StatItem({
+  const _StatCard({
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
+    required this.bgColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, size: 22, color: color),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      decoration: BoxDecoration(
+        color: bgColor.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withValues(alpha: 0.15),
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 20, color: color),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  height: 1,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 信息行
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String text;
+  final bool spinning;
+
+  const _InfoRow({
+    required this.icon,
+    required this.iconColor,
+    required this.text,
+    this.spinning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (spinning)
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: iconColor,
+            ),
+          )
+        else
+          Icon(icon, size: 16, color: iconColor),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.3,
+                ),
+          ),
         ),
       ],
     );
